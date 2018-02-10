@@ -1,0 +1,7 @@
+*CMakeLists.txt.user*
+build/
+*.user
+*.config
+*.creator
+*.files
+*.includes
