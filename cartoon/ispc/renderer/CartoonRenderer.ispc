@@ -23,7 +23,7 @@
 
 const unsigned int GRADIENT_SIZE = 4;
 
-struct BasicRenderer
+struct CartoonRenderer
 {
     AbstractRenderer abstract;
 };
@@ -34,8 +34,8 @@ struct BasicRenderer
     @param sample Screen sample containing information about the ray, and the
            location in the screen space.
 */
-inline vec3f CartoonRenderer_shadeRay(const uniform BasicRenderer* uniform self,
-                                      varying ScreenSample& sample)
+inline vec3f CartoonRenderer_shadeRay(
+    const uniform CartoonRenderer* uniform self, varying ScreenSample& sample)
 {
     Ray ray = sample.ray;
     varying vec3f color = make_vec3f(0.f);
@@ -89,8 +89,8 @@ void CartoonRenderer_renderSample(uniform Renderer* uniform _self,
                                   void* uniform perFrameData,
                                   varying ScreenSample& sample)
 {
-    uniform BasicRenderer* uniform self =
-        (uniform BasicRenderer * uniform)_self;
+    uniform CartoonRenderer* uniform self =
+        (uniform CartoonRenderer * uniform)_self;
     sample.ray.time = self->abstract.timestamp;
     sample.rgb = CartoonRenderer_shadeRay(self, sample);
 }
@@ -98,7 +98,7 @@ void CartoonRenderer_renderSample(uniform Renderer* uniform _self,
 // Exports (called from C++)
 export void* uniform CartoonRenderer_create(void* uniform cppE)
 {
-    uniform BasicRenderer* uniform self = uniform new uniform BasicRenderer;
+    uniform CartoonRenderer* uniform self = uniform new uniform CartoonRenderer;
     Renderer_Constructor(&self->abstract.super, cppE);
     self->abstract.super.renderSample = CartoonRenderer_renderSample;
     return self;
@@ -112,8 +112,8 @@ export void CartoonRenderer_set(void* uniform _self,
                                 void** uniform materials,
                                 uniform int32 numMaterials)
 {
-    uniform BasicRenderer* uniform self =
-        (uniform BasicRenderer * uniform)_self;
+    uniform CartoonRenderer* uniform self =
+        (uniform CartoonRenderer * uniform)_self;
 
     self->abstract.bgColor = bgColor;
     self->abstract.timestamp = timestamp;
