@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include "camera/Camera.h"
+#include <ospray/SDK/camera/Camera.h>
 
 namespace ospray
 {
@@ -29,7 +29,6 @@ struct OpenDeckCamera : public Camera
 {
     OpenDeckCamera();
     virtual ~OpenDeckCamera() override = default;
-
     virtual std::string toString() const override;
     virtual void commit() override;
 

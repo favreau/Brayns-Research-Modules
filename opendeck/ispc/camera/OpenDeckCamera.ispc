@@ -28,24 +28,45 @@ void OpenDeckCamera_initRay(uniform Camera *uniform _self, varying Ray &ray,
     uniform OpenDeckCamera *uniform self =
         (uniform OpenDeckCamera * uniform)_self;
 
-    const vec2f screen = Camera_subRegion(_self, sample.screen);
+    vec2f screen = sample.screen;
+    vec3f org = self->org;
 
-    const vec3f org = self->pos;
+    if (self->side_by_side)
+    {
+        screen.x *= 2.f;
+        if (screen.x < 1.f)
+            org = org - self->ipd_offset;
+        else
+        {
+            org = org + self->ipd_offset;
+            screen.x -= 1.f;
+        }
+    }
 
-    const float phi = two_pi * screen.x;
-    const float theta = -M_PI * screen.y;
+    screen = Camera_subRegion(_self, screen);
 
-    float sinTheta, cosTheta;
-    sincos(theta, &sinTheta, &cosTheta);
-    const vec3f localDir = cartesian(phi, sinTheta, cosTheta);
+    vec3f dir =
+        self->dir_00 + screen.x * self->dir_du + screen.y * self->dir_dv;
 
-    // transform into camera frame
-    const vec3f dir = self->frame * localDir;
+    if (self->super.doesDOF)
+    {
+        const vec3f llp = uniformSampleDisk(self->scaledAperture, sample.lens);
+        // transform local lens point to focal plane (dir_XX are prescaled in
+        // this case)
+        const vec3f lp =
+            (llp.x * self->dir_du) + ((llp.y * self->aspect) * self->dir_dv);
+        org = org + lp;
+        dir = dir - lp;
+    }
 
     const float time = Camera_shutterTime(_self, sample.time);
-    setRay(ray, org, dir, self->super.nearClip, infinity, time);
+    setRay(ray, org, normalize(dir), self->super.nearClip, infinity, time);
 }
 
+/*! create a new ispc-side version of a OpenDeckcamera - with given
+    pointer to the c-class version - and return both class pointer and
+    pointer to internal data back via the supplied reference
+    parameters */
 export void *uniform OpenDeckCamera_create(void *uniform cppE)
 {
     uniform OpenDeckCamera *uniform self = uniform new uniform OpenDeckCamera;
@@ -55,11 +76,21 @@ export void *uniform OpenDeckCamera_create(void *uniform cppE)
     return self;
 }
 
-export void OpenDeckCamera_set(void *uniform _self, const uniform vec3f &pos,
-                               const uniform linear3f &frame)
+export void OpenDeckCamera_set(
+    void *uniform _self, const uniform vec3f &org, const uniform vec3f &dir_00,
+    const uniform vec3f &dir_du, const uniform vec3f &dir_dv,
+    const uniform float scaledAperture, const uniform float aspect,
+    const uniform bool side_by_side, const uniform vec3f &ipd_offset)
 {
     uniform OpenDeckCamera *uniform self =
         (uniform OpenDeckCamera * uniform)_self;
-    self->pos = pos;
-    self->frame = frame;
+    self->org = org;
+    self->dir_00 = dir_00;
+    self->dir_du = dir_du;
+    self->dir_dv = dir_dv;
+    self->scaledAperture = scaledAperture;
+    self->super.doesDOF = scaledAperture > 0.f;
+    self->aspect = aspect;
+    self->side_by_side = side_by_side;
+    self->ipd_offset = ipd_offset;
 }
