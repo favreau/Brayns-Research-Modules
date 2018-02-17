@@ -1,0 +1,18 @@
+%{Cpp:LicenseTemplate}\
+#pragma once
+
+#include <ospray/SDK/camera/Camera.ih>
+
+struct %{ProjectName}Camera
+{
+    Camera super;
+
+    vec3f org;
+    vec3f dir_00;
+    vec3f dir_du;
+    vec3f dir_dv;
+    float scaledAperture;
+    float aspect;
+    bool side_by_side;
+    vec3f ipd_offset;
+};
