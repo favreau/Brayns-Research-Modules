@@ -21,6 +21,8 @@
 
 #include <common/ispc/renderer/AbstractRenderer.ih>
 
+const float GI_OPACITY_THRESHOLD = 0.5f;
+
 struct VolumeRenderer
 {
     Renderer super;
@@ -140,10 +142,10 @@ inline varying float getShadowContribution(
     return shadowIntensity;
 }
 
-inline float getShadowContribution(const uniform VolumeRenderer* uniform self,
-                                   const varying Ray& ray,
-                                   varying ScreenSample& sample,
-                                   const vec3f& point)
+inline float getShadowContributions(const uniform VolumeRenderer* uniform self,
+                                    const varying Ray& ray,
+                                    varying ScreenSample& sample,
+                                    const vec3f& point)
 {
     float shadowIntensity = 0.f;
     for (uniform int i = 0; self->lights && i < self->numLights; ++i)
@@ -157,16 +159,14 @@ inline float getShadowContribution(const uniform VolumeRenderer* uniform self,
         Ray lightRay = ray;
         if (self->softShadows > 0.f)
             lightRay.dir = normalize(
-                lightSample.dir +
-                self->softShadows * getRandomVector(sample, lightSample.dir,
-                                                    self->randomNumber));
+                self->softShadows *
+                getRandomVector(sample, lightSample.dir, self->randomNumber));
         else
             lightRay.dir = lightSample.dir;
 
         lightRay.t = length(make_vec3f(self->volumeDimensions));
         lightRay.t0 = self->super.epsilon;
         lightRay.org = point;
-        lightRay.dir = lightSample.dir;
 
         shadowIntensity += getShadowContribution(self, lightRay, sample);
     }
@@ -182,8 +182,12 @@ inline varying vec4f getVoxelColor(const uniform VolumeRenderer* uniform self,
                  (uint64)floor(point.z) * self->volumeDimensions.x *
                      self->volumeDimensions.y);
 
-    // Voxel raw value
+// Voxel raw value
+#if VOLUME_16BITS
+    const uint8 voxelValue = self->volumeData[index * 2];
+#else
     const uint8 voxelValue = self->volumeData[index];
+#endif
     const float normalizedValue =
         (voxelValue - self->colorMapMinValue) / self->colorMapRange;
 
@@ -204,8 +208,9 @@ inline varying vec4f
     getVolumeContribution(const uniform VolumeRenderer* uniform self,
                           const varying Ray& ray, varying ScreenSample& sample)
 {
+    const vec4f bgColor = make_vec4f(self->bgColor, 1.f);
     if (!self->colorMap)
-        return make_vec4f(0.f, 1.f, 0.f, 0.f);
+        return bgColor;
 
     // Find volume intersections
     float t0, t1;
@@ -214,17 +219,21 @@ inline varying vec4f
         make_vec3f(self->volumeOffset) +
         make_vec3f(self->volumeDimensions) * self->volumeElementSpacing;
     if (!intersectBox(self, ray, aabbMin, aabbMax, t0, t1))
-        return make_vec4f(0.f);
+        return bgColor;
 
     // Ray marching
     vec4f pathColor = make_vec4f(0.f);
-    const float epsilon = max(0.01f, (t1 - t0) / self->volumeSamplesPerRay);
+    const float epsilon = max(0.01f, (t1 - t0) / self->volumeSamplesPerRay) /
+                          min(1 + sample.sampleID.z, 3);
     const float random =
         self->softShadows > 0.f
             ? getRandomValue(sample, self->randomNumber) * epsilon
             : 0.f;
     t0 -= random;
     t1 -= random;
+    float shadowContribution = 1.f;
+    bool shadowProcessed = false;
+
     for (float t = t0; t < t1 && pathColor.w < 1.f; t += epsilon)
     {
         const vec3f point = ((ray.org + ray.dir * t) - self->volumeOffset) /
@@ -232,26 +241,34 @@ inline varying vec4f
 
         if (pointInVolume(point, self->volumeDimensions))
         {
-            const float shadowContribution =
-                self->shadows > 0.f
-                    ? getShadowContribution(self, ray, sample, point)
-                    : 1.f;
+            // Voxel color
+            vec4f voxelColor = getVoxelColor(self, point);
+
+            if (self->shadows > 0.f && voxelColor.w >= GI_OPACITY_THRESHOLD &&
+                !shadowProcessed)
+            {
+                shadowContribution =
+                    getShadowContributions(self, ray, sample, point);
+                shadowProcessed = true;
+            }
             if (shadowContribution < 0.01f)
             {
                 pathColor.w = 1.f;
                 break;
             }
 
-            // Voxel color
-            vec4f voxelColor = getVoxelColor(self, point);
-            voxelColor.x *= shadowContribution;
-            voxelColor.y *= shadowContribution;
-            voxelColor.z *= shadowContribution;
-
             // Compose final voxel color
-            composite(voxelColor, pathColor, (float)self->volumeSamplesPerRay);
+            composite(voxelColor, pathColor, 1.f);
         }
     }
+    // Do not affect Alpha
+    pathColor.x *= shadowContribution;
+    pathColor.y *= shadowContribution;
+    pathColor.z *= shadowContribution;
+
+    // Compose with background
+    composite(bgColor, pathColor, 1.f);
+
     return make_vec4f(min(1.f, pathColor.x), min(1.f, pathColor.y),
                       min(1.f, pathColor.z), min(1.f, pathColor.w));
 }
@@ -260,12 +277,13 @@ inline varying vec4f getVolumeShadedContribution(
     const uniform VolumeRenderer* uniform self, const varying Ray& ray,
     varying ScreenSample& sample)
 {
+    const vec4f bgColor = make_vec4f(self->bgColor, 1.f);
     vec4f pathColor = make_vec4f(0.f);
     const vec3f positions[7] = {{0, 0, 0}, {0, -1, 0}, {0, 1, 0}, {-1, 0, 0},
                                 {1, 0, 0}, {0, 0, 1},  {0, 0, -1}};
 
     if (!self->colorMap)
-        return make_vec4f(0.f, 1.f, 0.f, 0.f);
+        return bgColor;
 
     // Find volume intersections
     float t0, t1;
@@ -274,30 +292,23 @@ inline varying vec4f getVolumeShadedContribution(
         make_vec3f(self->volumeOffset) +
         make_vec3f(self->volumeDimensions) * self->volumeElementSpacing;
     if (!intersectBox(self, ray, aabbMin, aabbMax, t0, t1))
-        return make_vec4f(0.f, 0.f, 0.f, 0.f);
+        return bgColor;
 
     // Ray marching
-    const float epsilon = max(0.01f, (t1 - t0) / self->volumeSamplesPerRay);
+    const float epsilon = max(0.01f, (t1 - t0) / self->volumeSamplesPerRay) /
+                          min(1 + sample.sampleID.z, 3);
     const float random =
         self->softShadows > 0.f
             ? getRandomValue(sample, self->randomNumber) * epsilon
             : 0.f;
     t0 -= random;
     t1 -= random;
+    float shadowContribution = 1.f;
+    bool shadowProcessed = false;
     for (float t = t0; t < t1 && pathColor.w < 1.f; t += epsilon)
     {
         const vec3f point = ((ray.org + ray.dir * t) - self->volumeOffset) /
                             self->volumeElementSpacing;
-
-        const float shadowContribution =
-            self->shadows > 0.f
-                ? getShadowContribution(self, ray, sample, point)
-                : 1.f;
-        if (shadowContribution < 0.01f)
-        {
-            pathColor.w = 1.f;
-            break;
-        }
 
         vec3f normal = make_vec3f(0.f);
         vec4f voxelColor = make_vec4f(0.f);
@@ -311,36 +322,78 @@ inline varying vec4f getVolumeShadedContribution(
                 const vec4f color = getVoxelColor(self, neighbour);
 
                 if (i == 0)
+                {
                     voxelColor = color;
+                    if (color.w < GI_OPACITY_THRESHOLD)
+                        break;
+                }
 
                 // Normal
                 normal = normal + positions[i] * (1.f - color.w);
             }
+            else
+                normal = normal + positions[i];
         }
 
-        // Shading according to computed normal
-        for (uniform int i = 0; self->lights && i < self->numLights; ++i)
+        // Shadows
+        if (self->shadows > 0.f && voxelColor.w >= GI_OPACITY_THRESHOLD &&
+            !shadowProcessed)
         {
-            const uniform Light* uniform light = self->lights[i];
-            const vec2f s = make_vec2f(0.5f);
-            DifferentialGeometry dg;
-            dg.P = point;
-            const varying Light_SampleRes lightSample =
-                light->sample(light, dg, s);
-            const vec3f radiance = lightSample.weight;
-            const vec3f lightDirection = lightSample.dir;
-
-            voxelColor = voxelColor * max(0.f, dot(lightDirection, normal));
+            shadowContribution =
+                getShadowContributions(self, ray, sample, point);
+            shadowProcessed = true;
+        }
+        if (shadowContribution < 0.01f)
+        {
+            pathColor.w = 1.f;
+            break;
         }
 
-        // Affect color but not alpha
-        voxelColor.x *= shadowContribution;
-        voxelColor.y *= shadowContribution;
-        voxelColor.z *= shadowContribution;
+        if (voxelColor.w >= GI_OPACITY_THRESHOLD)
+        {
+            float angle;
+            if (self->electronShadingEnabled)
+            {
+                const vec3f viewer = normalize(sample.ray.org - point);
+                const float el = max(0.f, dot(viewer, normal));
+                angle = 1.f - el;
+            }
+            else
+            {
+                // Shading according to computed normal
+                uniform int i = 0;
+                // for (uniform int i = 0; self->lights && i <self->numLights;
+                // ++i)
+                {
+                    const uniform Light* uniform light = self->lights[i];
+                    const vec2f s = make_vec2f(0.5f);
+                    DifferentialGeometry dg;
+                    dg.P = point;
+                    const varying Light_SampleRes lightSample =
+                        light->sample(light, dg, s);
+                    const vec3f radiance = lightSample.weight;
+                    const vec3f lightDirection = lightSample.dir;
+
+                    angle = max(0.f, dot(lightDirection, normal));
+                }
+            }
+            // Do not affect Alpha
+            voxelColor.x = voxelColor.x * angle;
+            voxelColor.y = voxelColor.y * angle;
+            voxelColor.z = voxelColor.z * angle;
+        }
 
         // Compose final voxel color
-        composite(voxelColor, pathColor, (float)self->volumeSamplesPerRay);
+        composite(voxelColor, pathColor, 1.f);
     }
+    // Do not affect Alpha
+    pathColor.x *= shadowContribution;
+    pathColor.y *= shadowContribution;
+    pathColor.z *= shadowContribution;
+
+    // Compose with background
+    composite(bgColor, pathColor, 1.f);
+
     return make_vec4f(min(1.f, pathColor.x), min(1.f, pathColor.y),
                       min(1.f, pathColor.z), min(1.f, pathColor.w));
 }
@@ -359,7 +412,7 @@ inline vec3f VolumeRenderer_shadeRay(const uniform VolumeRenderer* uniform self,
 
     // Volume contribution
     if (self->volumeData)
-        color = self->electronShadingEnabled
+        color = (self->shadingEnabled || self->electronShadingEnabled)
                     ? make_vec3f(getVolumeShadedContribution(self, ray, sample))
                     : make_vec3f(getVolumeContribution(self, ray, sample));
 
