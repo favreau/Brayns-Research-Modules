@@ -174,13 +174,17 @@ inline float getShadowContributions(const uniform VolumeRenderer* uniform self,
 }
 
 inline varying vec4f getVoxelColor(const uniform VolumeRenderer* uniform self,
-                                   const vec3f& point)
+                                   const vec3f& point, vec3f interpolation)
 {
     const uint64 index =
         (uint64)((uint64)floor(point.x) +
                  (uint64)floor(point.y) * self->volumeDimensions.x +
                  (uint64)floor(point.z) * self->volumeDimensions.x *
                      self->volumeDimensions.y);
+
+    interpolation =
+        make_vec3f(point.x - floor(point.x), point.y - floor(point.y),
+                   point.z - floor(point.z));
 
 // Voxel raw value
 #if VOLUME_16BITS
@@ -242,7 +246,8 @@ inline varying vec4f
         if (pointInVolume(point, self->volumeDimensions))
         {
             // Voxel color
-            vec4f voxelColor = getVoxelColor(self, point);
+            vec3f interpolation;
+            vec4f voxelColor = getVoxelColor(self, point, interpolation);
 
             if (self->shadows > 0.f && voxelColor.w >= GI_OPACITY_THRESHOLD &&
                 !shadowProcessed)
@@ -312,6 +317,8 @@ inline varying vec4f getVolumeShadedContribution(
 
         vec3f normal = make_vec3f(0.f);
         vec4f voxelColor = make_vec4f(0.f);
+        unsigned int count = 0;
+        float voxelOpacity = 0.f;
         for (int i = 0; i < 7; ++i)
         {
             const vec3f neighbour =
@@ -319,21 +326,30 @@ inline varying vec4f getVolumeShadedContribution(
             if (pointInVolume(neighbour, self->volumeDimensions))
             {
                 // Voxel color
-                const vec4f color = getVoxelColor(self, neighbour);
+                vec3f interpolation;
+                const vec4f color =
+                    getVoxelColor(self, neighbour, interpolation);
+
+                voxelColor =
+                    voxelColor + make_vec4f(interpolation, 1.f) * color;
 
                 if (i == 0)
                 {
-                    voxelColor = color;
+                    voxelOpacity = color.w;
                     if (color.w < GI_OPACITY_THRESHOLD)
                         break;
                 }
 
                 // Normal
                 normal = normal + positions[i] * (1.f - color.w);
+                ++count;
             }
             else
                 normal = normal + positions[i];
         }
+
+        voxelColor = voxelColor / (count + 1);
+        voxelColor.w = voxelOpacity;
 
         // Shadows
         if (self->shadows > 0.f && voxelColor.w >= GI_OPACITY_THRESHOLD &&
