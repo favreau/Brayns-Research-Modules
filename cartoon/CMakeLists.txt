@@ -11,9 +11,11 @@ set(${MODULE_NAME}_VERSION_ABI 1)
 
 set(MODULE_SOURCES
     cartoon.cpp
+    ispc/renderer/ContoursRenderer.cpp
     ispc/renderer/CartoonRenderer.cpp)
 
 set(MODULE_ISPC_SOURCES
+    ispc/renderer/ContoursRenderer.ispc
     ispc/renderer/CartoonRenderer.ispc)
 
 # Compile ispc code
