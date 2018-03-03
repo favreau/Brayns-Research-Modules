@@ -18,7 +18,8 @@ include(ispc)
 
 # Add modules
 add_subdirectory(common)
-add_subdirectory(simulation)
 add_subdirectory(cartoon)
+add_subdirectory(fractals)
 add_subdirectory(opendeck)
+add_subdirectory(simulation)
 add_subdirectory(volume)
