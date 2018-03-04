@@ -61,6 +61,13 @@ struct VolumeRenderer
     float threshold;
 };
 
+inline float getEpsilon(const uniform VolumeRenderer* uniform self,
+                        const float dist, const unsigned int iteration)
+{
+    return max(0.001f,
+               dist / (self->volumeSamplesPerRay + 16 * min(iteration, 10)));
+}
+
 inline varying bool pointInVolume(const vec3f& point,
                                   const uniform vec3i& volume)
 {
@@ -111,17 +118,11 @@ inline varying float getShadowContribution(
         return 0.f;
 
     // Ray marching from light source to voxel
-    const float epsilon = max(0.01f, (t1 - t0) / self->volumeSamplesPerRay);
-    const float random =
-        self->softShadows > 0.f
-            ? getRandomValue(sample, self->randomNumber) * epsilon
-            : 0.f;
+    const float epsilon = getEpsilon(self, t1 - t0, sample.sampleID.z);
     float shadowIntensity = 0.f;
-    for (float t = t1 - random; t > epsilon && shadowIntensity < 1.f;
-         t -= epsilon)
+    for (float t = t1; t > epsilon && shadowIntensity < 1.f; t -= epsilon)
     {
-        vec3f point = ray.org + ray.dir * t;
-
+        const vec3f point = ray.org + ray.dir * t;
         if (pointInVolume(point, self->volumeDimensions))
         {
             uint64 index =
@@ -159,8 +160,9 @@ inline float getShadowContributions(const uniform VolumeRenderer* uniform self,
         Ray lightRay = ray;
         if (self->softShadows > 0.f)
             lightRay.dir = normalize(
-                self->softShadows *
-                getRandomVector(sample, lightSample.dir, self->randomNumber));
+                lightSample.dir +
+                self->softShadows * getRandomVector(sample, lightSample.dir,
+                                                    self->randomNumber));
         else
             lightRay.dir = lightSample.dir;
 
@@ -174,17 +176,13 @@ inline float getShadowContributions(const uniform VolumeRenderer* uniform self,
 }
 
 inline varying vec4f getVoxelColor(const uniform VolumeRenderer* uniform self,
-                                   const vec3f& point, vec3f interpolation)
+                                   const vec3f& point)
 {
     const uint64 index =
         (uint64)((uint64)floor(point.x) +
                  (uint64)floor(point.y) * self->volumeDimensions.x +
                  (uint64)floor(point.z) * self->volumeDimensions.x *
                      self->volumeDimensions.y);
-
-    interpolation =
-        make_vec3f(point.x - floor(point.x), point.y - floor(point.y),
-                   point.z - floor(point.z));
 
 // Voxel raw value
 #if VOLUME_16BITS
@@ -227,12 +225,8 @@ inline varying vec4f
 
     // Ray marching
     vec4f pathColor = make_vec4f(0.f);
-    const float epsilon = max(0.01f, (t1 - t0) / self->volumeSamplesPerRay) /
-                          min(1 + sample.sampleID.z, 3);
-    const float random =
-        self->softShadows > 0.f
-            ? getRandomValue(sample, self->randomNumber) * epsilon
-            : 0.f;
+    const float epsilon = getEpsilon(self, t1 - t0, sample.sampleID.z);
+    const float random = getRandomValue(sample, self->randomNumber) * epsilon;
     t0 -= random;
     t1 -= random;
     float shadowContribution = 1.f;
@@ -246,8 +240,7 @@ inline varying vec4f
         if (pointInVolume(point, self->volumeDimensions))
         {
             // Voxel color
-            vec3f interpolation;
-            vec4f voxelColor = getVoxelColor(self, point, interpolation);
+            vec4f voxelColor = getVoxelColor(self, point);
 
             if (self->shadows > 0.f && voxelColor.w >= GI_OPACITY_THRESHOLD &&
                 !shadowProcessed)
@@ -274,15 +267,16 @@ inline varying vec4f
     // Compose with background
     composite(bgColor, pathColor, 1.f);
 
-    return make_vec4f(min(1.f, pathColor.x), min(1.f, pathColor.y),
-                      min(1.f, pathColor.z), min(1.f, pathColor.w));
+    return pathColor;
 }
 
 inline varying vec4f getVolumeShadedContribution(
     const uniform VolumeRenderer* uniform self, const varying Ray& ray,
     varying ScreenSample& sample)
 {
+    const float ambientFactor = 0.25f;
     const vec4f bgColor = make_vec4f(self->bgColor, 1.f);
+    vec4f specularColor = make_vec4f(0.f);
     vec4f pathColor = make_vec4f(0.f);
     const vec3f positions[7] = {{0, 0, 0}, {0, -1, 0}, {0, 1, 0}, {-1, 0, 0},
                                 {1, 0, 0}, {0, 0, 1},  {0, 0, -1}};
@@ -300,12 +294,10 @@ inline varying vec4f getVolumeShadedContribution(
         return bgColor;
 
     // Ray marching
-    const float epsilon = max(0.01f, (t1 - t0) / self->volumeSamplesPerRay) /
-                          min(1 + sample.sampleID.z, 3);
-    const float random =
-        self->softShadows > 0.f
-            ? getRandomValue(sample, self->randomNumber) * epsilon
-            : 0.f;
+    const float epsilon = getEpsilon(self, t1 - t0, sample.sampleID.z);
+    const float random = getRandomValue(sample, self->randomNumber) * epsilon;
+    const vec3f neighbourEpsilon =
+        5.f * self->volumeElementSpacing; // WTF! why 5.f?
     t0 -= random;
     t1 -= random;
     float shadowContribution = 1.f;
@@ -317,39 +309,35 @@ inline varying vec4f getVolumeShadedContribution(
 
         vec3f normal = make_vec3f(0.f);
         vec4f voxelColor = make_vec4f(0.f);
-        unsigned int count = 0;
+        unsigned int count = 1;
         float voxelOpacity = 0.f;
         for (int i = 0; i < 7; ++i)
         {
-            const vec3f neighbour =
-                point + positions[i] * self->volumeElementSpacing * epsilon;
+            const vec3f neighbour = point + positions[i] * neighbourEpsilon;
             if (pointInVolume(neighbour, self->volumeDimensions))
             {
                 // Voxel color
-                vec3f interpolation;
-                const vec4f color =
-                    getVoxelColor(self, neighbour, interpolation);
-
-                voxelColor =
-                    voxelColor + make_vec4f(interpolation, 1.f) * color;
+                const vec4f color = getVoxelColor(self, neighbour);
 
                 if (i == 0)
                 {
+                    voxelColor = color;
                     voxelOpacity = color.w;
+
+                    if (color.w > 0.99f)
+                        sample.z = t;
                     if (color.w < GI_OPACITY_THRESHOLD)
                         break;
                 }
 
                 // Normal
                 normal = normal + positions[i] * (1.f - color.w);
-                ++count;
             }
             else
                 normal = normal + positions[i];
-        }
 
-        voxelColor = voxelColor / (count + 1);
-        voxelColor.w = voxelOpacity;
+            ++count;
+        }
 
         // Shadows
         if (self->shadows > 0.f && voxelColor.w >= GI_OPACITY_THRESHOLD &&
@@ -390,9 +378,26 @@ inline varying vec4f getVolumeShadedContribution(
                     const vec3f radiance = lightSample.weight;
                     const vec3f lightDirection = lightSample.dir;
 
+                    // Diffuse
                     angle = max(0.f, dot(lightDirection, normal));
+
+                    const unsigned int GRADIENT_SIZE = 3;
+                    const unsigned int angleAsInt = angle * GRADIENT_SIZE;
+                    angle = (float)(angleAsInt) / (float)(GRADIENT_SIZE);
+
+                    // Specular
+                    const vec3f reflectedNormal = normalize(
+                        ray.dir - 2.f * dot(ray.dir, normal) * normal);
+                    const float specularAngle =
+                        powf(max(0.f, dot(lightDirection, reflectedNormal)),
+                             20.f);
+                    angle = max(angle, specularAngle);
+                    specularColor = make_vec4f(make_vec3f(specularAngle), 0.f);
                 }
             }
+
+            angle = ambientFactor + (1.f - ambientFactor) * angle;
+
             // Do not affect Alpha
             voxelColor.x = voxelColor.x * angle;
             voxelColor.y = voxelColor.y * angle;
@@ -402,16 +407,25 @@ inline varying vec4f getVolumeShadedContribution(
         // Compose final voxel color
         composite(voxelColor, pathColor, 1.f);
     }
-    // Do not affect Alpha
+
+    // Ambient light
+    shadowContribution = max(0.f, min(1.f, shadowContribution + ambientFactor));
     pathColor.x *= shadowContribution;
     pathColor.y *= shadowContribution;
     pathColor.z *= shadowContribution;
 
+    if (shadowContribution > 0.9f)
+    {
+        // Specular color
+        pathColor.x = max(pathColor.x, specularColor.x);
+        pathColor.y = max(pathColor.y, specularColor.y);
+        pathColor.z = max(pathColor.z, specularColor.z);
+    }
+
     // Compose with background
     composite(bgColor, pathColor, 1.f);
 
-    return make_vec4f(min(1.f, pathColor.x), min(1.f, pathColor.y),
-                      min(1.f, pathColor.z), min(1.f, pathColor.w));
+    return pathColor;
 }
 
 inline vec3f VolumeRenderer_shadeRay(const uniform VolumeRenderer* uniform self,
