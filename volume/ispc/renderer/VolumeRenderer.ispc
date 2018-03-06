@@ -21,7 +21,9 @@
 
 #include <common/ispc/renderer/AbstractRenderer.ih>
 
-const float GI_OPACITY_THRESHOLD = 0.5f;
+#define REFRACTION
+
+const float GI_OPACITY_THRESHOLD = 0.001f;
 
 struct VolumeRenderer
 {
@@ -302,11 +304,22 @@ inline varying vec4f getVolumeShadedContribution(
     t1 -= random;
     float shadowContribution = 1.f;
     bool shadowProcessed = false;
+
+#ifdef REFRACTION
+    float oldRefraction = 1.f;
+    float T = t0;
+    vec3f dir = ray.dir;
+    vec3f origin = ray.org;
+    vec3f oldOrigin = ray.org;
+    vec3f point =
+        ((origin + dir * t0) - self->volumeOffset) / self->volumeElementSpacing;
+#else
+    vec3f point = ((ray.org + ray.dir * t0) - self->volumeOffset) /
+                  self->volumeElementSpacing;
+#endif
+
     for (float t = t0; t < t1 && pathColor.w < 1.f; t += epsilon)
     {
-        const vec3f point = ((ray.org + ray.dir * t) - self->volumeOffset) /
-                            self->volumeElementSpacing;
-
         vec3f normal = make_vec3f(0.f);
         vec4f voxelColor = make_vec4f(0.f);
         unsigned int count = 1;
@@ -381,10 +394,6 @@ inline varying vec4f getVolumeShadedContribution(
                     // Diffuse
                     angle = max(0.f, dot(lightDirection, normal));
 
-                    const unsigned int GRADIENT_SIZE = 3;
-                    const unsigned int angleAsInt = angle * GRADIENT_SIZE;
-                    angle = (float)(angleAsInt) / (float)(GRADIENT_SIZE);
-
                     // Specular
                     const vec3f reflectedNormal = normalize(
                         ray.dir - 2.f * dot(ray.dir, normal) * normal);
@@ -396,6 +405,7 @@ inline varying vec4f getVolumeShadedContribution(
                 }
             }
 
+            // Ambient light
             angle = ambientFactor + (1.f - ambientFactor) * angle;
 
             // Do not affect Alpha
@@ -404,8 +414,31 @@ inline varying vec4f getVolumeShadedContribution(
             voxelColor.z = voxelColor.z * angle;
         }
 
+#ifdef REFRACTION
+        // Refraction
+        const float refraction =
+            (voxelColor.w > 0.f ? 1.f + self->ambientOcclusionStrength * 0.25f
+                                : 1.f);
+        if (abs(refraction - oldRefraction) > 0.001f)
+        {
+            origin = oldOrigin + dir * T;
+            T = 0.f;
+            oldOrigin = origin;
+            dir = refractedVector(dir, normalize(normal), oldRefraction,
+                                  refraction);
+        }
+        oldRefraction = refraction;
+
+        T += epsilon;
+        point = ((origin + dir * T) - self->volumeOffset) /
+                self->volumeElementSpacing;
+#else
+        point = ((ray.org + ray.dir * t) - self->volumeOffset) /
+                self->volumeElementSpacing;
+#endif
+
         // Compose final voxel color
-        composite(voxelColor, pathColor, 1.f);
+        composite(voxelColor, pathColor, 0.5f);
     }
 
     // Ambient light
