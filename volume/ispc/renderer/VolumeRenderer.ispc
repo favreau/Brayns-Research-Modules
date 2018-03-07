@@ -21,9 +21,9 @@
 
 #include <common/ispc/renderer/AbstractRenderer.ih>
 
-#define REFRACTION
-
-const float GI_OPACITY_THRESHOLD = 0.001f;
+//#define REFRACTION
+const float GI_OPACITY_THRESHOLD = 0.01f;
+const float AMBIENT_LIGHT = 0.25f;
 
 struct VolumeRenderer
 {
@@ -276,12 +276,14 @@ inline varying vec4f getVolumeShadedContribution(
     const uniform VolumeRenderer* uniform self, const varying Ray& ray,
     varying ScreenSample& sample)
 {
-    const float ambientFactor = 0.25f;
     const vec4f bgColor = make_vec4f(self->bgColor, 1.f);
     vec4f specularColor = make_vec4f(0.f);
     vec4f pathColor = make_vec4f(0.f);
-    const vec3f positions[7] = {{0, 0, 0}, {0, -1, 0}, {0, 1, 0}, {-1, 0, 0},
-                                {1, 0, 0}, {0, 0, 1},  {0, 0, -1}};
+    const vec3f positions[15] = {{0, 0, 0},   {0, -1, 0},   {0, 1, 0},
+                                 {-1, 0, 0},  {1, 0, 0},    {0, 0, 1},
+                                 {0, 0, -1},  {-1, -1, -1}, {1, -1, -1},
+                                 {-1, 1, -1}, {1, 1, -1},   {-1, -1, 1},
+                                 {1, -1, 1},  {-1, 1, 1},   {1, 1, 1}};
 
     if (!self->colorMap)
         return bgColor;
@@ -298,8 +300,7 @@ inline varying vec4f getVolumeShadedContribution(
     // Ray marching
     const float epsilon = getEpsilon(self, t1 - t0, sample.sampleID.z);
     const float random = getRandomValue(sample, self->randomNumber) * epsilon;
-    const vec3f neighbourEpsilon =
-        5.f * self->volumeElementSpacing; // WTF! why 5.f?
+    const vec3f neighbourEpsilon = self->volumeElementSpacing * epsilon;
     t0 -= random;
     t1 -= random;
     float shadowContribution = 1.f;
@@ -324,9 +325,13 @@ inline varying vec4f getVolumeShadedContribution(
         vec4f voxelColor = make_vec4f(0.f);
         unsigned int count = 1;
         float voxelOpacity = 0.f;
-        for (int i = 0; i < 7; ++i)
+        for (int i = 0; i < min(15, max(7, sample.sampleID.z)); ++i)
         {
-            const vec3f neighbour = point + positions[i] * neighbourEpsilon;
+            const vec3f neighbour =
+                ((ray.org + positions[i] * neighbourEpsilon + ray.dir * t) -
+                 self->volumeOffset) /
+                self->volumeElementSpacing;
+
             if (pointInVolume(neighbour, self->volumeDimensions))
             {
                 // Voxel color
@@ -342,6 +347,8 @@ inline varying vec4f getVolumeShadedContribution(
                     if (color.w < GI_OPACITY_THRESHOLD)
                         break;
                 }
+                else
+                    voxelColor = voxelColor + color;
 
                 // Normal
                 normal = normal + positions[i] * (1.f - color.w);
@@ -351,6 +358,9 @@ inline varying vec4f getVolumeShadedContribution(
 
             ++count;
         }
+        voxelColor = voxelColor / count;
+        normal = normalize(normal);
+        voxelColor.w = voxelOpacity;
 
         // Shadows
         if (self->shadows > 0.f && voxelColor.w >= GI_OPACITY_THRESHOLD &&
@@ -406,7 +416,7 @@ inline varying vec4f getVolumeShadedContribution(
             }
 
             // Ambient light
-            angle = ambientFactor + (1.f - ambientFactor) * angle;
+            angle = AMBIENT_LIGHT + (1.f - AMBIENT_LIGHT) * angle;
 
             // Do not affect Alpha
             voxelColor.x = voxelColor.x * angle;
@@ -442,7 +452,7 @@ inline varying vec4f getVolumeShadedContribution(
     }
 
     // Ambient light
-    shadowContribution = max(0.f, min(1.f, shadowContribution + ambientFactor));
+    shadowContribution = min(1.f, shadowContribution + AMBIENT_LIGHT);
     pathColor.x *= shadowContribution;
     pathColor.y *= shadowContribution;
     pathColor.z *= shadowContribution;
