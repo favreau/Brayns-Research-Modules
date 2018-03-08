@@ -28,7 +28,7 @@ list(APPEND MODULE_SOURCES ${ISPC_OBJECTS})
 include_directories(${RESEARCH_BRAYNS_MODULE_DIR} ${OSPRAY_INCLUDE_DIRS})
 set(MODULE_LINK_LIBRARIES PUBLIC ${OSPRAY_LIBRARIES})
 add_library(${MODULE_NAME} SHARED ${MODULE_SOURCES})
-target_link_libraries(${MODULE_NAME} ${MODULE_LINK_LIBRARIES})
+target_link_libraries(${MODULE_NAME} ${MODULE_LINK_LIBRARIES} research_brayns_module_common)
 
 # Installation
 install(TARGETS ${MODULE_NAME}
