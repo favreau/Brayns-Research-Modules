@@ -3,7 +3,7 @@
  * Responsible Author: Cyrille Favreau <cyrille.favreau@epfl.ch>
  *
  * This file is part of the reseach Brayns module
- * <https://github.com/favreau/research-brayns-module>
+ * <https://github.com/favreau/Brayns-Research-Modules>
  *
  * This library is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 3.0 as published

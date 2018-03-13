@@ -2,7 +2,7 @@
 # All rights reserved. Do not distribute without permission.
 # Responsible Author: Cyrille Favreau <cyrille.favreau@epfl.ch>
 #
-# This file is part of https://github.com/favreau/research-brayns-module
+# This file is part of https://github.com/favreau/Brayns-Research-Modules
 
 cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
 set(MODULE_NAME ospray_module_opendeck)
