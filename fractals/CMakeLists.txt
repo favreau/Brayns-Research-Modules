@@ -1,6 +1,6 @@
-# Copyright (c) 2018, EPFL/Blue Brain Project
+# Copyright (c) Cyrille Favreau
 # All rights reserved. Do not distribute without permission.
-# Responsible Author: Cyrille Favreau <cyrille.favreau@epfl.ch>
+# Responsible Author: Cyrille Favreau <cyrille.favreau@gmail.com>
 #
 # This file is part of https://github.com/favreau/Brayns-Research-Modules
 
