@@ -15,6 +15,7 @@ set(BRAYNS_RESEARCH_COMMON_SOURCES
 
 set(BRAYNS_RESEARCH_COMMON_ISPC_SOURCES
     ispc/renderer/SkyBox.ispc
+    ispc/renderer/Glsl.ispc
     ispc/renderer/RandomGenerator.ispc
     ispc/renderer/ExtendedOBJMaterial.ispc
     ispc/renderer/AbstractRenderer.ispc)

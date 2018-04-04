@@ -1,0 +1,64 @@
+/* Copyright (c) 2018, Cyrille Favreau
+ * All rights reserved. Do not distribute without permission.
+ * Responsible Author: Cyrille Favreau <cyrille.favreau@gmail.com>
+ *
+ * This file is part of the reseach Brayns module
+ * <https://github.com/favreau/Brayns-Research-Modules>
+ *
+ * This library is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License version 3.0 as published
+ * by the Free Software Foundation.
+ *
+ * This library is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
+#pragma once
+
+#include <ospray/SDK/math/vec.ih>
+
+/**
+ * @brief Linearly interpolate between two values
+ * @param x Specifies the start of the range in which to interpolate
+ * @param y Specifies the end of the range in which to interpolate
+ * @param a Specifies the value to use to interpolate between x and y
+ * @return A linear interpolation between x and y using a to weight between
+ * them. The return value is computed as x×(1−a)+y×a
+ */
+float mix(const float x, const float y, const float a);
+
+/**
+ * @brief Compute value of one parameter modulo another. This is computed as x -
+ * y * floor(x/y)
+ * @param x Specifies the value to evaluate
+ * @param y Specifies the value for the modulo
+ * @return The value of x modulo y
+ */
+vec3f mod(const vec3f& x, const int y);
+vec3f mod(const vec3f& x, const vec3f& y);
+
+/**
+ * @brief Perform Hermite interpolation between two values
+ * @param edge0 Specifies the value of the lower edge of the Hermite function
+ * @param edge1 Specifies the value of the upper edge of the Hermite function
+ * @param x Specifies the source value for interpolation
+ * @return The smooth Hermite interpolation between 0 and 1 when edge0 < x <
+ * edge1. This is useful in cases where a threshold function with a smooth
+ * transition is desired. Results are undefined if edge0 ≥ edge1
+ */
+float smoothstep(const float edge0, const float edge1, float x);
+
+/**
+ * @brief Extracts the sign of the parameter
+ * @param Specifies the value from which to extract the sign
+ * @return -1.0 if x is less than 0.0, 0.0 if x is equal to 0.0, and +1.0 if x
+ * is greater than 0.0
+ */
+float sign(const float v);
+vec3f sign(const vec3f& v);

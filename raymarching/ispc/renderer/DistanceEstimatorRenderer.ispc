@@ -23,6 +23,7 @@ http://www.iquilezles.org/www/articles/menger/menger.htm
 */
 
 #include <common/ispc/renderer/AbstractRenderer.ih>
+#include <common/ispc/renderer/Glsl.ih>
 #include <ospray/SDK/math/math.ih>
 
 uniform float freqs[16];
@@ -88,22 +89,6 @@ inline vec3f hash3(const float n)
 {
     return frac(make_vec3f(sinf(n), sinf(n + 1.0), sinf(n + 2.0))) *
            make_vec3f(43758.5453123, 22578.1459123, 19642.3490423);
-}
-
-inline vec3f sign(const vec3f v)
-{
-    return make_vec3f(v.x > 0 ? 1.f : -1.f, v.y > 0 ? 1.f : -1.f,
-                      v.z > 0 ? 1.f : -1.f);
-}
-
-inline vec3f mod(const vec3f v, const int m)
-{
-    return make_vec3f((int)v.x % m, (int)v.y % m, (int)v.z % m);
-}
-
-inline float mix(const float x, const float y, const float a)
-{
-    return x * (1.f - a) + y * a;
 }
 
 inline vec3f snoise3(const float x)

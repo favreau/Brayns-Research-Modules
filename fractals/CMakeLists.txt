@@ -11,9 +11,11 @@ set(${MODULE_NAME}_VERSION_ABI 1)
 
 set(MODULE_SOURCES
     fractals.cpp
+    ispc/renderer/MengerSpongeRenderer.cpp
     ispc/renderer/FractalsRenderer.cpp)
 
 set(MODULE_ISPC_SOURCES
+    ispc/renderer/MengerSpongeRenderer.ispc
     ispc/renderer/FractalsRenderer.ispc)
 
 # Compile ispc code
