@@ -54,6 +54,23 @@ struct FractalsRenderer
     uint32 volumeSamplesPerRay;
 };
 
+inline varying bool intersectBox(const varying Ray& ray, const vec3f& aabbMin,
+                                 const vec3f& aabbMax, varying float& t0,
+                                 varying float& t1)
+{
+    Ray r = ray;
+    vec3f invR = 1.f / r.dir;
+    vec3f tbot = invR * (aabbMin - r.org);
+    vec3f ttop = invR * (aabbMax - r.org);
+    vec3f tmin = min(ttop, tbot);
+    vec3f tmax = max(ttop, tbot);
+    vec2f t = make_vec2f(max(tmin.x, tmin.y), max(tmin.x, tmin.z));
+    t0 = max(t.x, t.y);
+    t = make_vec2f(min(tmax.x, tmax.y), min(tmax.x, tmax.z));
+    t1 = min(t.x, t.y);
+    return (t0 <= t1);
+}
+
 inline varying uint8
     getJuliaContribution(const uniform FractalsRenderer* uniform self,
                          const vec3f& point, const unsigned int iterations)
@@ -132,12 +149,14 @@ inline vec3f FractalsRenderer_shadeRay(
     float pathOpacity = 0.f;
 
     float epsilon = self->volumeDimensions.z / self->volumeSamplesPerRay;
-    float t = 0.f;
 
-    // Fractal volume
+    float t0, t1;
+    vec3f aabbmin = make_vec3f(0, 0, 0);
+    vec3f aabbmax = self->volumeDimensions;
+    intersectBox(sample.ray, aabbmin, aabbmax, t0, t1);
+    float t = t0;
     vec3f point;
-    for (t = epsilon; pathOpacity < 1.f && t < self->volumeDimensions.z;
-         t += epsilon)
+    for (t = t0; pathOpacity < 1.f && t < t1; t += epsilon)
     {
         point = (sample.ray.org + t * sample.ray.dir) - 0.5f;
         vec4f voxelColor = getVoxelColor(self, point, sample.sampleID.z);
