@@ -34,37 +34,7 @@ namespace brayns
 {
 void DistanceEstimatorRenderer::commit()
 {
-    Renderer::commit();
-
-    _lightData = (ospray::Data*)getParamData("lights");
-    _lightArray.clear();
-
-    if (_lightData)
-        for (size_t i = 0; i < _lightData->size(); ++i)
-            _lightArray.push_back(
-                ((ospray::Light**)_lightData->data)[i]->getIE());
-
-    _lightPtr = _lightArray.empty() ? nullptr : &_lightArray[0];
-
-    _bgColor = getParam3f("bgColor", ospray::vec3f(1.f));
-    _shadows = getParam1f("shadows", 0.f);
-    _softShadows = getParam1f("softShadows", 0.f);
-    _ambientOcclusionStrength = getParam1f("aoWeight", 0.f);
-    _ambientOcclusionDistance = getParam1f("aoDistance", 1e20f);
-    _shadingEnabled = bool(getParam1i("shadingEnabled", 1));
-    _randomNumber = getParam1i("randomNumber", 0);
-    _timestamp = getParam1f("timestamp", 0.f);
-    _spp = getParam1i("spp", 1);
-    _electronShadingEnabled = bool(getParam1i("electronShading", 0));
-
-    // Those materials are used for simulation mapping only
-    _materialData = (ospray::Data*)getParamData("materials");
-    _materialArray.clear();
-    if (_materialData)
-        for (size_t i = 0; i < _materialData->size(); ++i)
-            _materialArray.push_back(
-                ((ospray::Material**)_materialData->data)[i]->getIE());
-    _materialPtr = _materialArray.empty() ? nullptr : &_materialArray[0];
+    AbstractRenderer::commit();
 
     // Transfer function
     _transferFunctionDiffuseData = getParamData("transferFunctionDiffuseData");
@@ -79,10 +49,10 @@ void DistanceEstimatorRenderer::commit()
     _volumeSamplesPerRay = getParam1i("volumeSamplesPerRay", 32);
 
     ispc::DistanceEstimatorRenderer_set(
-        getIE(), (ispc::vec3f&)_bgColor, _shadows, _softShadows,
-        _ambientOcclusionStrength, _ambientOcclusionDistance, _shadingEnabled,
-        _randomNumber, _timestamp, _spp, _electronShadingEnabled, _lightPtr,
-        _lightArray.size(), _materialPtr, _materialArray.size(),
+        getIE(), (_bgMaterial ? _bgMaterial->getIE() : nullptr), _shadows,
+        _softShadows, _ambientOcclusionStrength, _ambientOcclusionDistance,
+        _shadingEnabled, _randomNumber, _timestamp, _spp,
+        _electronShadingEnabled, _lightPtr, _lightArray.size(),
         _volumeSamplesPerRay,
         _transferFunctionDiffuseData
             ? (ispc::vec4f*)_transferFunctionDiffuseData->data

@@ -87,9 +87,8 @@ inline vec3f ContoursRenderer_shadeRay(
     if (ray.geomID < 0)
     {
         // No intersection. Return skybox color
-        color = make_vec3f(skyboxMapping((Renderer*)self, ray,
-                                         self->abstract.numMaterials,
-                                         self->abstract.materials));
+        color = make_vec3f(
+            skyboxMapping((Renderer*)self, ray, self->abstract.bgMaterial));
         sample.alpha = 0.f;
         return color;
     }
@@ -148,26 +147,24 @@ export void* uniform ContoursRenderer_create(void* uniform cppE)
     return self;
 }
 
-export void ContoursRenderer_set(
-    void* uniform _self, const uniform vec3f& bgColor,
-    const uniform float& timestamp, const uniform int& spp,
-    void** uniform lights, uniform int32 numLights, void** uniform materials,
-    uniform int32 numMaterials, const uniform bool wireframe,
-    const uniform float& detectionDistance)
+export void ContoursRenderer_set(void* uniform _self, void* uniform bgMaterial,
+                                 const uniform float& timestamp,
+                                 const uniform int& spp, void** uniform lights,
+                                 uniform int32 numLights,
+                                 const uniform bool wireframe,
+                                 const uniform float& detectionDistance)
 {
     uniform ContoursRenderer* uniform self =
         (uniform ContoursRenderer * uniform)_self;
 
-    self->abstract.bgColor = bgColor;
+    self->abstract.bgMaterial =
+        (uniform ExtendedOBJMaterial * uniform)bgMaterial;
+
     self->abstract.timestamp = timestamp;
     self->abstract.spp = spp;
 
     self->abstract.lights = (const uniform Light* uniform* uniform)lights;
     self->abstract.numLights = numLights;
-
-    self->abstract.materials =
-        (const uniform ExtendedOBJMaterial* uniform* uniform)materials;
-    self->abstract.numMaterials = numMaterials;
 
     self->wireframe = wireframe;
     self->detectionDistance = detectionDistance;

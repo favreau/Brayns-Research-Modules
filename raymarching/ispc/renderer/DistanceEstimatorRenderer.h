@@ -25,7 +25,7 @@
 
 namespace brayns
 {
-class DistanceEstimatorRenderer : public ospray::Renderer
+class DistanceEstimatorRenderer : public AbstractRenderer
 {
 public:
     DistanceEstimatorRenderer();
@@ -38,28 +38,6 @@ public:
     void commit() final;
 
 private:
-    std::vector<void*> _lightArray;
-    void** _lightPtr;
-    std::vector<void*> _materialArray;
-    void** _materialPtr;
-
-    Model* _world;
-    Camera* _camera;
-    ospray::Data* _materialData;
-    ospray::Data* _lightData;
-
-    ospray::vec3f _bgColor;
-    float _shadows;
-    float _softShadows;
-    float _ambientOcclusionStrength;
-    float _ambientOcclusionDistance;
-    bool _shadingEnabled;
-    bool _electronShadingEnabled;
-    bool _gradientBackgroundEnabled;
-    int _randomNumber;
-    float _timestamp;
-    int _spp;
-
     // Transfer function
     ospray::Ref<ospray::Data> _transferFunctionDiffuseData;
     ospray::Ref<ospray::Data> _transferFunctionEmissionData;

@@ -36,10 +36,10 @@ void PathTracingRenderer::commit()
 {
     AbstractRenderer::commit();
 
-    ispc::PathTracingRenderer_set(getIE(), (ispc::vec3f&)_bgColor, _timestamp,
-                                  _spp, _lightPtr, _lightArray.size(),
-                                  _materialPtr, _materialArray.size(),
-                                  _ambientOcclusionStrength,
+    ispc::PathTracingRenderer_set(getIE(), (_bgMaterial ? _bgMaterial->getIE()
+                                                        : nullptr),
+                                  _timestamp, _spp, _lightPtr,
+                                  _lightArray.size(), _ambientOcclusionStrength,
                                   _ambientOcclusionDistance);
 }
 

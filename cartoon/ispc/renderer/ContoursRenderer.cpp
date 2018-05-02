@@ -38,10 +38,10 @@ void ContoursRenderer::commit()
     _detectionDistance = getParam1f("detectionDistance", 1.f);
     _wireframe = bool(getParam1i("electronShading", 0));
 
-    ispc::ContoursRenderer_set(getIE(), (ispc::vec3f&)_bgColor, _timestamp,
-                               _spp, _lightPtr, _lightArray.size(),
-                               _materialPtr, _materialArray.size(), _wireframe,
-                               _detectionDistance);
+    ispc::ContoursRenderer_set(getIE(),
+                               (_bgMaterial ? _bgMaterial->getIE() : nullptr),
+                               _timestamp, _spp, _lightPtr, _lightArray.size(),
+                               _wireframe, _detectionDistance);
 }
 
 ContoursRenderer::ContoursRenderer()

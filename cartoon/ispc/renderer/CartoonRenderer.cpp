@@ -35,9 +35,9 @@ void CartoonRenderer::commit()
 {
     AbstractRenderer::commit();
 
-    ispc::CartoonRenderer_set(getIE(), (ispc::vec3f&)_bgColor, _timestamp, _spp,
-                              _lightPtr, _lightArray.size(), _materialPtr,
-                              _materialArray.size());
+    ispc::CartoonRenderer_set(getIE(),
+                              (_bgMaterial ? _bgMaterial->getIE() : nullptr),
+                              _timestamp, _spp, _lightPtr, _lightArray.size());
 }
 
 CartoonRenderer::CartoonRenderer()
