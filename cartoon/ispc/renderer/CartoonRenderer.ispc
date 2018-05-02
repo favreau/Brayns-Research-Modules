@@ -45,6 +45,9 @@ inline vec3f CartoonRenderer_shadeRay(
 
     traceRay(self->abstract.super.model, ray);
 
+    RTCScene data = (RTCScene)self->abstract.super.model->embreeSceneHandle;
+    void* d = rtcGetUserData(data, 0);
+
     if (ray.geomID < 0)
     {
         // No intersection. Return skybox color

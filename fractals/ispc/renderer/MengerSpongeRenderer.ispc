@@ -48,6 +48,9 @@ struct MengerSpongeRenderer
     uint32 samplesPerRay;
 };
 
+const float FAR_PLANE = 100.f;
+const int MAP_NB_ITERATION = 0;
+
 inline float maxcomp(const vec3f& p)
 {
     return max(p.x, max(p.y, p.z));
@@ -177,7 +180,7 @@ inline float smin(const float a, const float b, const float k)
 
 inline float opBlend(const float a, const float b)
 {
-    return smin(a, b, 12);
+    return smin(a, b, 5);
 }
 
 inline vec3f opTwist(const vec3f& p)
@@ -192,7 +195,7 @@ inline vec3f opTwist(const vec3f& p)
 
 inline float opDisplacement(const vec3f& p)
 {
-    return 0.1f * sin(10.f * p.x) * sin(10.f * p.y) * sin(10.f * p.z);
+    return 0.1f * sin(5.f * p.x) * sin(5.f * p.y) * sin(5.f * p.z);
 }
 
 // -----------------------------------------------------------------------------
@@ -201,17 +204,33 @@ inline float opDisplacement(const vec3f& p)
 
 inline vec4f map(const uniform MengerSpongeRenderer* uniform self, vec3f& p)
 {
-    vec3f point = p - make_vec3f(0.5);
-    const vec3f radius = make_vec3f(1.f);
-    float d = sdBox(point, radius);
+    vec3f point = p - make_vec3f(0.5f);
+    const vec3f radius = make_vec3f(0.05f, 0.1f, 0.1f);
+
+    const vec3f centers[10] = {{1, 0, 0},     {0, 1, 1},      {0.5, 0, 0},
+                               {0, -0.5, 0},  {0, 0.5, 0.5},  {0, 1, 0},
+                               {1, 1, 0},     {0, 0.5, -0.5}, {0, 0.5, 0},
+                               {-0.5, 0.5, 0}};
+    float d = sdSphere(point + centers[0], radius);
+    for (int i = 1; i < 9; ++i)
+    {
+        vec3f a = centers[i];
+        vec3f b = centers[i + 1];
+        d = opBlend(d, sdCapsule(point, a, b, radius.x));
+    }
     vec4f res = make_vec4f(d);
 
-    const float ani = smoothstep(-0.2f, 0.2f, -cos(0.5f * self->timer));
-    const float off = 1.5f * sin(0.01f * self->timer);
-
     float s = 1.f;
-    for (int m = 0; m < 4; m++)
+    float ani = 0.f;
+    float off = 0.f;
+    for (int m = 0; m < MAP_NB_ITERATION; m++)
     {
+        if (m == 0)
+        {
+            ani = smoothstep(-0.2f, 0.2f, -cos(0.5f * self->timer));
+            off = 1.5f * sin(0.01f * self->timer);
+        }
+
         const vec3f ma = self->ma * (point + off);
         point = make_vec3f(mix(point.x, ma.x, ani), mix(point.y, ma.y, ani),
                            mix(point.z, ma.z, ani));
@@ -243,13 +262,13 @@ inline vec4f intersect(const uniform MengerSpongeRenderer* uniform self,
     vec4f h = make_vec4f(1.f);
     for (int i = 0; i < self->samplesPerRay; ++i)
     {
-        if (h.x < 0.0001f || t > 10.f)
+        if (h.x < 0.0001f || t > FAR_PLANE)
             break;
         h = map(self, ro + rd * t);
         res = make_vec4f(t, h.y, h.z, h.w);
         t += h.x;
     }
-    if (t > 10.f)
+    if (t > FAR_PLANE)
         res = make_vec4f(-1.f);
     return res;
 }
@@ -294,19 +313,19 @@ inline vec3f render(const uniform MengerSpongeRenderer* uniform self,
                    mix(self->bgColor.y * 0.5f, 0.9f, 0.5f + 0.5f * rd.y),
                    mix(self->bgColor.z * 0.5f, 1.0f, 0.5f + 0.5f * rd.y));
 
-    // light
-    const uniform Light* uniform light = self->lights[0];
-    const vec2f s = make_vec2f(0.5f);
-    DifferentialGeometry dg;
-    const Light_SampleRes lightSample = light->sample(light, dg, s);
-    const vec3f radiance = lightSample.weight;
-    const vec3f lightDirection = lightSample.dir;
-
     vec4f tmat = intersect(self, ro, rd);
     if (tmat.x > 0.f)
     {
-        vec3f pos = ro + tmat.x * rd;
-        vec3f nor = calcNormal(self, pos);
+        // Shading
+        const uniform Light* uniform light = self->lights[0];
+        const vec2f s = make_vec2f(0.5f);
+        DifferentialGeometry dg;
+        const Light_SampleRes lightSample = light->sample(light, dg, s);
+        const vec3f radiance = lightSample.weight;
+        const vec3f lightDirection = lightSample.dir;
+
+        const vec3f pos = ro + tmat.x * rd;
+        const vec3f normal = calcNormal(self, pos);
 
         const float occ = tmat.y;
         const float sha =
@@ -314,14 +333,10 @@ inline vec3f render(const uniform MengerSpongeRenderer* uniform self,
                 ? softshadow(self, pos, lightDirection, 0.01f, 64.f)
                 : 1.f;
 
-        const float dif = max(0.1f + 0.9f * dot(nor, lightDirection), 0.f);
-        const float sky = 0.5f + 0.5f * nor.y;
+        const float dif = max(0.1f + 0.9f * dot(normal, lightDirection), 0.f);
+        const float sky = 0.5f + 0.5f * normal.y;
         const float bac =
-            max(0.4f +
-                    0.6f *
-                        dot(nor, make_vec3f(-lightDirection.x, lightDirection.y,
-                                            -lightDirection.z)),
-                0.f);
+            max(0.4f + 0.6f * dot(normal, neg(lightDirection)), 0.f);
 
         vec3f lin = make_vec3f(0.f);
         lin = lin + 1.f * dif * make_vec3f(1.1f, 0.85f, 0.6f) * sha;
