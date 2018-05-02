@@ -78,7 +78,7 @@ inline vec3f PathTracingRenderer_shadeRay(
     varying vec3f color = make_vec3f(0.f);
 
     const vec3f constantskycolor = make_vec3f(0.4f, 0.45f, 0.5f) * 2.5f;
-    const float skypower = 6.0f;
+    const float skypower = 3.0f;
     const float skypower_zerobounce = 3.0f;
 
     sample.z = inf;

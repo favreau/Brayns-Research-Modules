@@ -49,7 +49,7 @@ struct MengerSpongeRenderer
 };
 
 const float FAR_PLANE = 100.f;
-const int MAP_NB_ITERATION = 0;
+const int MAP_NB_ITERATION = 4;
 
 inline float maxcomp(const vec3f& p)
 {
@@ -205,8 +205,8 @@ inline float opDisplacement(const vec3f& p)
 inline vec4f map(const uniform MengerSpongeRenderer* uniform self, vec3f& p)
 {
     vec3f point = p - make_vec3f(0.5f);
+#if 0
     const vec3f radius = make_vec3f(0.05f, 0.1f, 0.1f);
-
     const vec3f centers[10] = {{1, 0, 0},     {0, 1, 1},      {0.5, 0, 0},
                                {0, -0.5, 0},  {0, 0.5, 0.5},  {0, 1, 0},
                                {1, 1, 0},     {0, 0.5, -0.5}, {0, 0.5, 0},
@@ -218,6 +218,10 @@ inline vec4f map(const uniform MengerSpongeRenderer* uniform self, vec3f& p)
         vec3f b = centers[i + 1];
         d = opBlend(d, sdCapsule(point, a, b, radius.x));
     }
+#else
+    const vec3f radius = make_vec3f(1.f);
+    float d = sdBox(point, radius);
+#endif
     vec4f res = make_vec4f(d);
 
     float s = 1.f;
