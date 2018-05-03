@@ -23,8 +23,9 @@
 #include <common/ispc/renderer/AbstractRenderer.ih>
 #include <ospray/SDK/fb/FrameBuffer.ih>
 
-const float skypower = 1.0f;
+const float skypower = 3.0f;
 const float skypower_zerobounce = 1.0f;
+const float ambientFactor = 2.f;
 
 struct PathTracingRenderer
 {
@@ -136,7 +137,7 @@ inline vec3f PathTracingRenderer_shadeRay(
     sample.alpha = 0.f;
 
     bool moreRebounds = true;
-    while (moreRebounds && depth < NB_MAX_REBOUNDS)
+    while (moreRebounds && depth < NB_MAX_REBOUNDS && pathOpacity > 0.f)
     {
         float opacity = 1.f;
         float reflection = 0.f;
@@ -169,6 +170,8 @@ inline vec3f PathTracingRenderer_shadeRay(
 
             vec3f normal = dg.Ns;
             vec3f Kd = make_vec3f(0.f);
+            vec3f Ks = make_vec3f(0.f);
+            float Ns = 0.f;
 
             if (!objMaterial)
             {
@@ -179,6 +182,8 @@ inline vec3f PathTracingRenderer_shadeRay(
                 foreach_unique(mat in objMaterial)
                 {
                     opacity = mat->d;
+
+                    // Diffuse
                     Kd = mat->Kd;
                     if (valid(mat->map_Kd))
                     {
@@ -187,25 +192,52 @@ inline vec3f PathTracingRenderer_shadeRay(
                         opacity *= value.w;
                     }
 
+                    // Specular
+                    Ks = mat->Ks;
+                    if (valid(mat->map_Ks))
+                        Ks = get3f(mat->map_Ks, dg.st);
+                    Ns = mat->Ns;
+                    if (valid(mat->map_Ns))
+                        Ns = get1f(mat->map_Ns, dg.st);
+
+                    // Refraction
                     refraction = mat->refraction;
+                    if (valid(mat->map_refraction))
+                        refraction = get1f(mat->map_refraction, dg.st);
+
+                    // Reflection
                     reflection = mat->reflection;
+                    if (valid(mat->map_reflection))
+                    {
+                        const vec4f value = get4f(mat->map_reflection, dg.st);
+                        Ns = value.x * 100.f;
+                        reflection = value.w;
+                    }
 
                     // Normal mapping
                     if (valid(mat->map_Bump))
-                        normal = normalize(get3f(mat->map_Bump, dg.st) - 0.5f);
+                        normal =
+                            normalize(normal * get3f(mat->map_Bump, dg.st));
 
                     // Emissive mapping
-                    //                    if (valid(mat->map_Bump))
-                    //                        Kd = get3f(mat->map_Bump, dg.st);
+                    if (valid(mat->map_a))
+                        Kd = Kd + get3f(mat->map_a, dg.st);
                 }
 
-            /*
+            const vec3f reflectedNormal =
+                ray.dir - 2.f * dot(ray.dir, normal) * normal;
+
+            // Phong + Blinn shading
+            float cosNL = ambientFactor * max(0.f, dot(sunDirection, normal));
+            const float cosLR = max(0.f, dot(sunDirection, reflectedNormal));
+            const vec3f specularColor = Ks * powf(cosLR, Ns);
+
             // Path tracing contribution
+            const float ao =
+                ambientFactor * self->abstract.ambientOcclusionStrength;
             const vec3f pathTracingColor =
-                Kd + pathTracingContribution(self, sample);
-                */
-            const vec3f pathTracingColor =
-                Kd * radiance * max(0.f, dot(normal, sunDirection));
+                ao > 0.f ? Kd * ao * pathTracingContribution(self, sample)
+                         : Kd * radiance * cosNL + specularColor;
 
             // Alpha and Z-Depth
             if (depth == 0)
@@ -214,9 +246,8 @@ inline vec3f PathTracingRenderer_shadeRay(
                 sample.alpha = opacity;
             }
 
-            // Prepare ray for next iteration
-            const vec3f reflectedNormal =
-                ray.dir - 2.f * dot(ray.dir, normal) * normal;
+            color =
+                pathTracingColor * pathOpacity + color * (1.f - pathOpacity);
 
             // Prepare ray for next iteration
             bool doRefraction = (opacity < 1.f);
@@ -224,10 +255,11 @@ inline vec3f PathTracingRenderer_shadeRay(
             if (doRefraction && doReflection)
             {
                 // Switch between refraction and reflection
-                const bool refract = sample.sampleID.z % 2 == 1;
+                const bool refract = sample.sampleID.z % 2 == 0;
                 doRefraction = refract;
                 doReflection = !refract;
             }
+
             if (doRefraction)
             {
                 // Refraction
@@ -236,7 +268,7 @@ inline vec3f PathTracingRenderer_shadeRay(
                 if (abs(refraction - oldlocalRefraction) < 0.001f &&
                     angle > 0.f)
                 {
-                    // Exiting object, back to air (refraction index = 1)
+                    // Exiting object, back to air (refractionindex = 1)
                     refraction = 1.f;
                     correctedNormal = correctedNormal * -1.f;
                 }
@@ -246,8 +278,7 @@ inline vec3f PathTracingRenderer_shadeRay(
                                           oldlocalRefraction, refraction);
                 ray.org = intersection + self->abstract.super.epsilon * ray.dir;
 
-                pathOpacity -= opacity;
-                color = color * pathOpacity + pathTracingColor * opacity;
+                pathOpacity -= (1.f - opacity);
                 oldlocalRefraction = refraction;
                 ++depth;
             }
@@ -259,15 +290,10 @@ inline vec3f PathTracingRenderer_shadeRay(
                 ray.org = intersection +
                           self->abstract.super.epsilon * reflectedNormal;
                 pathOpacity -= reflection;
-                color =
-                    color * pathOpacity + pathTracingColor * (1.f - reflection);
                 ++depth;
             }
             else
-            {
                 moreRebounds = false;
-                color = pathTracingColor * opacity + color * (1.f - opacity);
-            }
 
             ray.t = inf;
             ray.primID = -1;
