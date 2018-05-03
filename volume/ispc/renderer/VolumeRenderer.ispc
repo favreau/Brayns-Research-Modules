@@ -161,10 +161,11 @@ inline float getShadowContributions(const uniform VolumeRenderer* uniform self,
 
         Ray lightRay = ray;
         if (self->softShadows > 0.f)
-            lightRay.dir = normalize(
-                lightSample.dir +
-                self->softShadows * getRandomVector(sample, lightSample.dir,
-                                                    self->randomNumber));
+            lightRay.dir = normalize(lightSample.dir +
+                                     self->softShadows *
+                                         getRandomVector(self->super.fb, sample,
+                                                         lightSample.dir,
+                                                         self->randomNumber));
         else
             lightRay.dir = lightSample.dir;
 

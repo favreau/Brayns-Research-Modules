@@ -34,7 +34,8 @@ float getRandomValue(varying ScreenSample& sample, const int randomNumber);
    distribution
     @return A random direction based on specified parameters
 */
-vec3f getRandomVector(varying ScreenSample& sample, const vec3f& normal,
+vec3f getRandomVector(uniform FrameBuffer* uniform fb,
+                      varying ScreenSample& sample, const vec3f& normal,
                       const int randomNumber);
 
 /**

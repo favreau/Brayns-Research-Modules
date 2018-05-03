@@ -22,46 +22,90 @@
 
 #include <common/ispc/renderer/AbstractRenderer.ih>
 #include <ospray/SDK/fb/FrameBuffer.ih>
-#include <ospray/SDK/math/random.ih>
-#include <ospray/SDK/render/util.ih>
+
+const float skypower = 1.0f;
+const float skypower_zerobounce = 1.0f;
 
 struct PathTracingRenderer
 {
     AbstractRenderer abstract;
 };
 
-inline float rotate(float x, float dx)
+inline vec3f pathTracingContribution(const uniform PathTracingRenderer* uniform
+                                         self,
+                                     varying ScreenSample& sample)
 {
-    x += dx;
-    if (x >= 1.f) // keep x always between [0.0-1.0]
-        x -= 1.f;
-    return x;
-}
+    const vec3f sunColor = make_vec3f(1.0f, 0.8f, 0.5f) * 2.0f;
+    const vec3f constantskycolor = make_vec3f(0.4f, 0.45f, 0.5f) * 2.5f;
+    vec3f Kd;
+    Ray localray = sample.ray;
+    vec3f accucolor = make_vec3f(0.f);
+    vec3f mask = make_vec3f(1.f);
 
-// gets a random direction from a rotated frame
-inline vec3f getRandomDir(varying RandomTEA* uniform rng, const vec3f biNorm0,
-                          const vec3f biNorm1, const vec3f gNormal,
-                          const float rot_x, const float rot_y,
-                          const uniform float epsilon)
-{
-    const vec2f rn = RandomTEA__getFloats(rng);
-    const float r0 = rotate(rn.x, rot_x);
-    const float r1 = rotate(rn.y, rot_y);
+    // path tracing loop
+    for (int bounces = 0; bounces < 3; bounces++)
+    {
+        traceRay(self->abstract.super.model, localray);
 
-    const float w = sqrt(1.f - r1);
-    const float x = cos((2.f * M_PI) * r0) * w;
-    const float y = sin((2.f * M_PI) * r0) * w;
-    const float z = sqrt(r1) + epsilon;
-    return x * biNorm0 + y * biNorm1 + z * gNormal;
-}
+        // if ray misses scene (no hit occurs), return background colour
+        if (localray.geomID < 0)
+        {
+            const vec3f bgcol =
+                make_vec3f(skyboxMapping((Renderer*)self, localray,
+                                         self->abstract.bgMaterial)) *
+                skypower;
+            accucolor = accucolor + mask * bgcol;
+            break;
+        }
+        DifferentialGeometry dg;
+        postIntersect(self->abstract.super.model, dg, localray,
+                      DG_NG | DG_NS | DG_NORMALIZE | DG_FACEFORWARD |
+                          DG_MATERIALID | DG_COLOR | DG_TEXCOORD);
 
-inline void getBinormals(vec3f& biNorm0, vec3f& biNorm1, const vec3f& gNormal)
-{
-    biNorm0 = make_vec3f(1.f, 0.f, 0.f);
-    if (abs(dot(biNorm0, gNormal)) > .95f)
-        biNorm0 = make_vec3f(0.f, 1.f, 0.f);
-    biNorm1 = normalize(cross(biNorm0, gNormal));
-    biNorm0 = normalize(cross(biNorm1, gNormal));
+        uniform Material* material = dg.material;
+        uniform ExtendedOBJMaterial* objMaterial =
+            (uniform ExtendedOBJMaterial*)material;
+        if (!objMaterial)
+            Kd = make_vec3f(dg.color);
+        else
+            foreach_unique(mat in objMaterial) Kd =
+                mat->Kd * make_vec3f(dg.color);
+
+        // compute local orthornormal base at hitpoint
+        const vec3f N = dg.Ns;
+
+        // compute ray direction of uniformly random diffuse ray
+        const vec3f raydir = getRandomVector(self->abstract.super.fb, sample, N,
+                                             self->abstract.randomNumber);
+
+        // origin of new ray in path is hitpoint of previous ray in path
+        const vec3f hitpoint = dg.P + (self->abstract.super.epsilon * N);
+        setRay(localray, hitpoint, raydir);
+        localray.t0 = self->abstract.super.epsilon;
+        localray.t = self->abstract.ambientOcclusionDistance;
+
+#if 0
+        //***************************************
+        //           direct lighting
+        //***************************************
+
+        // cosine weighted contribution
+        const float sunLight = dot(dg.Ns, sunDirection);
+
+        if (sunLight > 0.f) // if surface is facing
+            light
+            {
+                // create and trace a shadowray towards
+                the sun Ray sunRay;
+                setRay(sunRay, hitpoint, sunDirection);
+            }
+#endif
+
+        // take surface color at this bounce's hitpoint into account
+        mask = mask * Kd;
+
+    } // end bounces
+    return accucolor;
 }
 
 /**
@@ -77,35 +121,16 @@ inline vec3f PathTracingRenderer_shadeRay(
     Ray ray = sample.ray;
     vec3f color = make_vec3f(0.f);
 
-#if 1
     const uniform Light* uniform light = self->abstract.lights[0];
     const vec2f s = make_vec2f(0.5f);
     DifferentialGeometry dg;
     const varying Light_SampleRes lightSample = light->sample(light, dg, s);
     const vec3f sunDirection = lightSample.dir;
-#else
-    const vec3f sunDirection = make_vec3f(1.f);
-#endif
+    const vec3f radiance = lightSample.weight;
 
-    const vec3f sunColor = make_vec3f(1.0f, 0.8f, 0.5f) * 2.0f;
-    const vec3f constantskycolor = make_vec3f(0.4f, 0.45f, 0.5f) * 2.5f;
-    const float skypower = 3.0f;
-    const float skypower_zerobounce = 3.0f;
+    float pathOpacity = 1.f;
     float oldlocalRefraction = 1.f;
     int depth = 0;
-
-    // random number generation (RNG)
-    const uniform int accumID =
-        reduce_max(sample.sampleID.z) * self->abstract.spp;
-    const uniform float rot_x = 1.f - precomputedHalton3(accumID);
-    const uniform float rot_y = 1.f - precomputedHalton5(accumID);
-
-    uniform FrameBuffer* uniform fb = self->abstract.super.fb;
-    RandomTEA rng_state;
-    varying RandomTEA* const uniform rng = &rng_state;
-    RandomTEA__Constructor(rng,
-                           (fb->size.x * sample.sampleID.y) + sample.sampleID.x,
-                           accumID);
 
     sample.z = inf;
     sample.alpha = 0.f;
@@ -135,13 +160,16 @@ inline vec3f PathTracingRenderer_shadeRay(
             DifferentialGeometry dg;
             postIntersect(self->abstract.super.model, dg, ray,
                           DG_NS | DG_NG | DG_NORMALIZE | DG_FACEFORWARD |
-                              DG_MATERIALID | DG_COLOR);
+                              DG_MATERIALID | DG_COLOR | DG_TEXCOORD);
+            const vec3f intersection = dg.P;
 
             uniform Material* material = dg.material;
             uniform ExtendedOBJMaterial* objMaterial =
                 (uniform ExtendedOBJMaterial*)material;
 
+            vec3f normal = dg.Ns;
             vec3f Kd = make_vec3f(0.f);
+
             if (!objMaterial)
             {
                 Kd = make_vec3f(dg.color);
@@ -150,86 +178,34 @@ inline vec3f PathTracingRenderer_shadeRay(
             else
                 foreach_unique(mat in objMaterial)
                 {
-                    Kd = mat->Kd * make_vec3f(dg.color);
                     opacity = mat->d;
+                    Kd = mat->Kd;
+                    if (valid(mat->map_Kd))
+                    {
+                        const vec4f value = get4f(mat->map_Kd, dg.st);
+                        Kd = make_vec3f(value);
+                        opacity *= value.w;
+                    }
+
                     refraction = mat->refraction;
                     reflection = mat->reflection;
+
+                    // Normal mapping
+                    if (valid(mat->map_Bump))
+                        normal = normalize(get3f(mat->map_Bump, dg.st) - 0.5f);
+
+                    // Emissive mapping
+                    //                    if (valid(mat->map_Bump))
+                    //                        Kd = get3f(mat->map_Bump, dg.st);
                 }
 
-            const vec3f intersection = dg.P;
-            const vec3f normal = dg.Ns;
-
-            Ray localray = ray;
-            vec3f accucolor = make_vec3f(0.f);
-            vec3f mask = make_vec3f(1.f);
-
-            // path tracing loop
-            for (int bounces = 0; bounces < 3; bounces++)
-            {
-                traceRay(self->abstract.super.model, localray);
-
-                // if ray misses scene (no hit occurs), return background colour
-                if (localray.geomID < 0)
-                {
-                    const vec3f bgcol =
-                        make_vec3f(skyboxMapping((Renderer*)self, localray,
-                                                 self->abstract.bgMaterial)) *
-                        skypower;
-                    accucolor = accucolor + mask * bgcol;
-                    break;
-                }
-                DifferentialGeometry dg;
-                postIntersect(self->abstract.super.model, dg, localray,
-                              DG_NG | DG_NS | DG_NORMALIZE | DG_FACEFORWARD |
-                                  DG_MATERIALID | DG_COLOR | DG_TEXCOORD);
-
-                uniform Material* material = dg.material;
-                uniform ExtendedOBJMaterial* objMaterial =
-                    (uniform ExtendedOBJMaterial*)material;
-                if (!objMaterial)
-                    Kd = make_vec3f(dg.color);
-                else
-                    foreach_unique(mat in objMaterial) Kd =
-                        mat->Kd * make_vec3f(dg.color);
-
-                // compute local orthornormal base at hitpoint
-                const vec3f N = dg.Ns;
-                vec3f biNormU, biNormV;
-                getBinormals(biNormU, biNormV, N);
-
-                // compute ray direction of uniformly random diffuse ray
-                const vec3f raydir =
-                    getRandomDir(rng, biNormU, biNormV, N, rot_x, rot_y,
-                                 self->abstract.super.epsilon);
-
-                // origin of new ray in path is hitpoint of previous ray in path
-                const vec3f hitpoint =
-                    dg.P + (self->abstract.super.epsilon * N);
-                setRay(localray, hitpoint, raydir);
-                localray.t0 = self->abstract.super.epsilon;
-                localray.t = 1e6f; // self->abstract.ambientOcclusionDistance;
-
-#if 0
-                //***************************************
-                //           direct lighting
-                //***************************************
-
-                // cosine weighted contribution
-                const float sunLight = dot(dg.Ns, sunDirection);
-
-                if (sunLight > 0.f) // if surface is facing
-                    light
-                    {
-                        // create and trace a shadowray towards
-                        the sun Ray sunRay;
-                        setRay(sunRay, hitpoint, sunDirection);
-                    }
-#endif
-
-                // take surface color at this bounce's hitpoint into account
-                mask = mask * Kd;
-
-            } // end bounces
+            /*
+            // Path tracing contribution
+            const vec3f pathTracingColor =
+                Kd + pathTracingContribution(self, sample);
+                */
+            const vec3f pathTracingColor =
+                Kd * radiance * max(0.f, dot(normal, sunDirection));
 
             // Alpha and Z-Depth
             if (depth == 0)
@@ -242,7 +218,17 @@ inline vec3f PathTracingRenderer_shadeRay(
             const vec3f reflectedNormal =
                 ray.dir - 2.f * dot(ray.dir, normal) * normal;
 
-            if (opacity < 1.f)
+            // Prepare ray for next iteration
+            bool doRefraction = (opacity < 1.f);
+            bool doReflection = (reflection > 0.f);
+            if (doRefraction && doReflection)
+            {
+                // Switch between refraction and reflection
+                const bool refract = sample.sampleID.z % 2 == 1;
+                doRefraction = refract;
+                doReflection = !refract;
+            }
+            if (doRefraction)
             {
                 // Refraction
                 vec3f correctedNormal = normal;
@@ -260,24 +246,27 @@ inline vec3f PathTracingRenderer_shadeRay(
                                           oldlocalRefraction, refraction);
                 ray.org = intersection + self->abstract.super.epsilon * ray.dir;
 
-                color = accucolor * opacity + color * (1.f - opacity);
+                pathOpacity -= opacity;
+                color = color * pathOpacity + pathTracingColor * opacity;
                 oldlocalRefraction = refraction;
                 ++depth;
             }
-            else if (reflection > 0.f)
+            else if (doReflection)
             {
                 // Reflection
                 ray.t0 = 0.f;
                 ray.dir = reflectedNormal;
                 ray.org = intersection +
                           self->abstract.super.epsilon * reflectedNormal;
-                color = color * reflection + accucolor * (1.f - reflection);
+                pathOpacity -= reflection;
+                color =
+                    color * pathOpacity + pathTracingColor * (1.f - reflection);
                 ++depth;
             }
             else
             {
                 moreRebounds = false;
-                color = accucolor * opacity + color * (1.f - opacity);
+                color = pathTracingColor * opacity + color * (1.f - opacity);
             }
 
             ray.t = inf;

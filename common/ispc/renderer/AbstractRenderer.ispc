@@ -26,7 +26,8 @@ inline bool launchRandomRay(
     DifferentialGeometry& geometry, varying vec3f& backgroundColor,
     varying float& distanceToIntersection, varying vec3f& randomDirection)
 {
-    randomDirection = getRandomVector(sample, normal, self->randomNumber);
+    randomDirection =
+        getRandomVector(self->super.fb, sample, normal, self->randomNumber);
     backgroundColor = make_vec3f(0.f);
 
     if (dot(randomDirection, normal) < 0.f)
@@ -159,8 +160,9 @@ inline float shadedLightIntensity(const uniform AbstractRenderer* uniform self,
     if (self->softShadows != 0.f)
         // Slightly alter light direction for Soft shadows
         ld = normalize(ld +
-                       self->softShadows *
-                           getRandomVector(sample, normal, self->randomNumber));
+                       self->softShadows * getRandomVector(self->super.fb,
+                                                           sample, normal,
+                                                           self->randomNumber));
 
     Ray shadowRay;
     setRay(shadowRay, intersection, ld);
@@ -403,7 +405,8 @@ inline varying vec4f
                         lightRay.dir = normalize(
                             lightSample.dir +
                             self->softShadows *
-                                getRandomVector(sample, lightSample.dir,
+                                getRandomVector(self->super.fb, sample,
+                                                lightSample.dir,
                                                 self->randomNumber));
                     else
                         lightRay.dir = lightSample.dir;

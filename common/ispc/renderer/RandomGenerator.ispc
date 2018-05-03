@@ -18,6 +18,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+#include <ospray/SDK/math/random.ih>
 #include <ospray/SDK/render/Renderer.ih>
 #include <ospray/SDK/render/util.ih>
 
@@ -1129,9 +1130,16 @@ inline float getRandomValue(varying ScreenSample& sample,
     return rotate(randomDistribution[x][y], sample.sampleID.z % 8);
 }
 
-inline vec3f getRandomVector(varying ScreenSample& sample, const vec3f& normal,
+inline vec3f getRandomVector(uniform FrameBuffer* uniform fb,
+                             varying ScreenSample& sample, const vec3f& normal,
                              const int randomNumber)
 {
+    RandomTEA rng_state;
+    varying RandomTEA* const uniform rng = &rng_state;
+    RandomTEA__Constructor(rng,
+                           (fb->size.x * sample.sampleID.y) + sample.sampleID.x,
+                           sample.sampleID.z);
+
     vec3f tangent, biTangent;
     getTangentVectors(normal, tangent, biTangent);
     const int accumID = sample.sampleID.z + randomNumber;
