@@ -119,8 +119,8 @@ inline vec3f TransparencyRenderer_shadeRay(
             else
                 foreach_unique(mat in objMaterial)
                 {
-                    Kd = mat->Kd;
-                    opacity = mat->d;
+                    Kd = mat->diffuse;
+                    opacity = mat->opacity;
                 }
 
             //            if (objMaterial->castSimulationData)

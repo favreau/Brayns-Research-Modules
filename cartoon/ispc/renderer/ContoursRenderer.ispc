@@ -110,7 +110,8 @@ inline vec3f ContoursRenderer_shadeRay(
     if (!objMaterial)
         Kd = make_vec3f(dg.color);
     else
-        foreach_unique(mat in objMaterial) Kd = mat->Kd * make_vec3f(dg.color);
+        foreach_unique(mat in objMaterial) Kd =
+            mat->diffuse * make_vec3f(dg.color);
 
     // Launch a ray parallel to the camera ray, shifted in the direction of
     // the intersected surface normal

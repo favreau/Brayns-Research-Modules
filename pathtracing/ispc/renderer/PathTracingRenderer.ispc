@@ -70,7 +70,7 @@ inline vec3f pathTracingContribution(const uniform PathTracingRenderer* uniform
             Kd = make_vec3f(dg.color);
         else
             foreach_unique(mat in objMaterial) Kd =
-                mat->Kd * make_vec3f(dg.color);
+                mat->diffuse * make_vec3f(dg.color);
 
         // compute local orthornormal base at hitpoint
         const vec3f N = dg.Ns;
@@ -181,29 +181,27 @@ inline vec3f PathTracingRenderer_shadeRay(
             else
                 foreach_unique(mat in objMaterial)
                 {
-                    opacity = mat->d;
+                    opacity = mat->opacity;
 
                     // Diffuse
-                    Kd = mat->Kd;
-                    if (valid(mat->map_Kd))
+                    Kd = mat->diffuse;
+                    if (valid(mat->map_diffuse))
                     {
-                        const vec4f value = get4f(mat->map_Kd, dg.st);
+                        const vec4f value = get4f(mat->map_diffuse, dg.st);
                         Kd = make_vec3f(value);
                         opacity *= value.w;
                     }
 
                     // Specular
-                    Ks = mat->Ks;
-                    if (valid(mat->map_Ks))
-                        Ks = get3f(mat->map_Ks, dg.st);
-                    Ns = mat->Ns;
-                    if (valid(mat->map_Ns))
-                        Ns = get1f(mat->map_Ns, dg.st);
+                    Ks = mat->specular;
+                    if (valid(mat->map_specular))
+                        Ks = get3f(mat->map_specular, dg.st);
+                    Ns = mat->shininess;
+                    if (valid(mat->map_shininess))
+                        Ns = get1f(mat->map_shininess, dg.st);
 
                     // Refraction
                     refraction = mat->refraction;
-                    if (valid(mat->map_refraction))
-                        refraction = get1f(mat->map_refraction, dg.st);
 
                     // Reflection
                     reflection = mat->reflection;
@@ -215,13 +213,13 @@ inline vec3f PathTracingRenderer_shadeRay(
                     }
 
                     // Normal mapping
-                    if (valid(mat->map_Bump))
+                    if (valid(mat->map_normals))
                         normal =
-                            normalize(normal * get3f(mat->map_Bump, dg.st));
+                            normalize(normal * get3f(mat->map_normals, dg.st));
 
                     // Emissive mapping
-                    if (valid(mat->map_a))
-                        Kd = Kd + get3f(mat->map_a, dg.st);
+                    if (valid(mat->map_emission))
+                        Kd = Kd + get3f(mat->map_emission, dg.st);
                 }
 
             const vec3f reflectedNormal =

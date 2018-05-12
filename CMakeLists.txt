@@ -24,4 +24,4 @@ add_subdirectory(simulation)
 add_subdirectory(volume)
 add_subdirectory(raymarching)
 add_subdirectory(pathtracing)
-
+add_subdirectory(pbr)

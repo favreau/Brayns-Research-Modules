@@ -27,10 +27,10 @@
 vec4f skyboxMapping(const uniform Renderer* uniform renderer, Ray& ray,
                     const uniform ExtendedOBJMaterial* uniform bgMaterial)
 {
-    varying vec4f result = make_vec4f(bgMaterial->Kd);
+    varying vec4f result = make_vec4f(bgMaterial->diffuse);
 
     const varying float radius = 1e6;
-    if (!valid(bgMaterial->map_Kd))
+    if (!valid(bgMaterial->map_diffuse))
         return result;
 
     // solve the equation sphere-ray to find the intersections
@@ -67,5 +67,5 @@ vec4f skyboxMapping(const uniform Renderer* uniform renderer, Ray& ray,
         st = {((atan2(intersection.x, intersection.z) / PI) + 1.f) * .5f,
               -(asin(intersection.y) / PI) + .5f};
 
-    return get4f(bgMaterial->map_Kd, st);
+    return get4f(bgMaterial->map_diffuse, st);
 }

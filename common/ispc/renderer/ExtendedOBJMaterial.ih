@@ -32,24 +32,28 @@ struct ExtendedOBJMaterial
 {
     uniform Material super;
 
-    TextureParam map_d;
-    float d;
-    TextureParam map_Kd;
-    vec3f Kd;
-    TextureParam map_Ks;
-    vec3f Ks;
-    TextureParam map_Ns;
-    float Ns;
-    TextureParam map_Bump;
-    linear2f rot_Bump;
-    uniform Volume *uniform volume;
-
-    float glossiness;
-    bool castSimulationData;
-    TextureParam map_a;
-    float a;
-    TextureParam map_refraction;
-    float refraction;
+    TextureParam map_opacity;
+    float opacity;
+    TextureParam map_diffuse;
+    vec3f diffuse;
+    TextureParam map_specular;
+    vec3f specular;
+    TextureParam map_shininess;
+    float shininess;
+    TextureParam map_normals;
+    linear2f rot_normals;
+    TextureParam map_emission;
+    float emission;
     TextureParam map_reflection;
     float reflection;
+    TextureParam map_metal;
+    float refraction;
+    float glossiness;
+
+    bool castSimulationData;
+
+    // PBR attributes
+    vec4f pbrBaseColorFactor;
+    float pbrMetallicFactor;
+    float pbrRoughnessFactor;
 };

@@ -70,7 +70,8 @@ inline vec3f CartoonRenderer_shadeRay(
     if (!objMaterial)
         Kd = make_vec3f(dg.color);
     else
-        foreach_unique(mat in objMaterial) Kd = mat->Kd * make_vec3f(dg.color);
+        foreach_unique(mat in objMaterial) Kd =
+            mat->diffuse * make_vec3f(dg.color);
 
     // Head-light cartoon shading
     const vec3f intersection = dg.P + self->abstract.super.epsilon * dg.Ns;
