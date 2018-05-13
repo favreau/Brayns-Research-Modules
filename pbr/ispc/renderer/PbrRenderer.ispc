@@ -20,180 +20,101 @@
  */
 
 #include <common/ispc/renderer/AbstractRenderer.ih>
-
-const unsigned int GRADIENT_SIZE = 4;
-
-/**
- * @brief Encapsulate the various inputs used by the various functions in the
- * shading equation. We store values in this struct to simplify the integration
- * of alternative implementations of the shading terms.
- */
-struct PBRInfo
-{
-    float NdotL; // cos angle between normal and light direction
-    float NdotV; // cos angle between normal and view direction
-    float NdotH; // cos angle between normal and half vector
-    float LdotH; // cos angle between light direction and half vector
-    float VdotH; // cos angle between view direction and half vector
-    float perceptualRoughness; // roughness value, as authored by the model
-                               // creator (input to shader)
-    float metalness;           // metallic value at the surface
-    vec3f reflectance0;   // full reflectance color (normal incidence angle)
-    vec3f reflectance90;  // reflectance color at grazing angle
-    float alphaRoughness; // roughness mapped to a more linear change in the
-                          // roughness (proposed by [2])
-    vec3f diffuseColor;   // color contribution from diffuse lighting
-    vec3f specularColor;  // color contribution from specular lighting
-};
+#include <common/ispc/renderer/Glsl.ih>
 
 struct PbrRenderer
 {
     AbstractRenderer abstract;
 };
 
-inline vec3f mix(const vec3f x, const vec3f y, const float a)
+inline vec3f mix(const vec3f& x, const vec3f& y, const vec3f& a)
 {
     return x * (1.f - a) + y * a;
 }
 
-inline vec3f diffuse(const PBRInfo& pbrInputs)
+#if 1
+inline vec3f step(const vec3f& edge, const vec3f& x)
 {
-    return pbrInputs.diffuseColor / M_PI;
+    return make_vec3f(x.x < edge.x ? 0.f : 1.f, x.y < edge.y ? 0.f : 1.f,
+                      x.z < edge.z ? 0.f : 1.f);
 }
 
-inline vec3f specularReflection(const PBRInfo& pbrInputs)
+inline vec4f SRGBtoLINEAR(const vec4f& srgbIn)
 {
-    return pbrInputs.reflectance0 +
-           (pbrInputs.reflectance90 - pbrInputs.reflectance0) *
-               pow(clamp(1.0 - pbrInputs.VdotH, 0.0, 1.0), 5.0);
+    const vec3f srgb = make_vec3f(srgbIn);
+    const vec3f a = make_vec3f(0.04045f);
+    vec3f bLess = step(a, srgb);
+    const vec3f b = (srgb + make_vec3f(0.055f)) / make_vec3f(1.055f);
+    const vec3f c = srgb / make_vec3f(12.92f);
+    const vec3f d = make_vec3f(pow(b.x, 2.4f), pow(b.y, 2.4f), pow(b.z, 2.4f));
+    vec3f linOut = mix(c, d, bLess);
+    return make_vec4f(linOut, srgbIn.w);
+}
+#endif
+
+// This G term is used in glTF-WebGL-PBR Microfacet Models for Refraction
+// through Rough Surfaces
+inline float G1_GGX(const float alphaSq, const float NoX)
+{
+    float tanSq = (1.f - NoX * NoX) / max((NoX * NoX), 0.00001f);
+    return 2.f / (1.f + sqrt(1.f + alphaSq * tanSq));
 }
 
-inline float geometricOcclusion(const PBRInfo& pbrInputs)
+// 1 / (1 + delta(l)) * 1 / (1 + delta(v))
+inline float Smith_G(const float alphaSq, const float NoL, const float NoV)
 {
-    float NdotL = pbrInputs.NdotL;
-    float NdotV = pbrInputs.NdotV;
-    float r = pbrInputs.alphaRoughness;
-
-    float attenuationL =
-        2.f * NdotL / (NdotL + sqrt(r * r + (1.f - r * r) * (NdotL * NdotL)));
-    float attenuationV =
-        2.f * NdotV / (NdotV + sqrt(r * r + (1.f - r * r) * (NdotV * NdotV)));
-    return attenuationL * attenuationV;
+    return G1_GGX(alphaSq, NoL) * G1_GGX(alphaSq, NoV);
 }
 
-inline float microfacetDistribution(const PBRInfo& pbrInputs)
+// Height-Correlated Masking and Shadowing
+// Smith Joint Masking-Shadowing Function
+inline float GGX_Delta(const float alphaSq, const float NoX)
 {
-    float roughnessSq = pbrInputs.alphaRoughness * pbrInputs.alphaRoughness;
-    float f =
-        (pbrInputs.NdotH * roughnessSq - pbrInputs.NdotH) * pbrInputs.NdotH +
-        1.f;
-    return roughnessSq / (M_PI * f * f);
+    return (-1.f + sqrt(1.f + alphaSq * (1.f / (NoX * NoX) - 1.f))) / 2.f;
 }
 
-void processMetallicRoughness(const float metallic, vec3f& diffuseColor,
-                              vec3f& specularColor, float& specularExponent,
-                              float& reflection)
+inline float SmithJoint_G(const float alphaSq, const float NoL, const float NoV)
 {
-    vec3f f0 = make_vec3f(0.04f);
-    diffuseColor = diffuseColor * (make_vec3f(1.f) - f0);
-    diffuseColor = diffuseColor * (1.f - metallic);
-
-    specularColor = mix(f0, diffuseColor, metallic);
-    specularExponent = 10.f;
-
-    reflection = max(max(specularColor.x, specularColor.y), specularColor.z);
+    return 1.f / (1.f + GGX_Delta(alphaSq, NoL) + GGX_Delta(alphaSq, NoV));
 }
 
-vec3f reflectedVector(const vec3f& incident, const vec3f& normal)
+inline float GGX_D(const float alphaSq, const float NoH)
 {
-    return incident - 2.f * dot(incident, normal) * normal;
+    float c = (NoH * NoH * (alphaSq - 1.f) + 1.f);
+    return alphaSq / (c * c) / PI;
 }
 
-void processMetallicRoughness(const vec3f& normal, const vec3f& surfaceToCamera,
-                              const vec3f& surfaceToLight,
-                              const vec4f& baseColor, const float roughness,
-                              const float metallic, vec3f& diffuseColor,
-                              vec3f& specularColor, float& specularExponent,
-                              float& reflection, vec3f& reflected)
+inline void BRDF(const vec3f L, const vec3f V, const vec3f N,
+                 const vec3f& baseColor, const float metallic,
+                 const float roughness, vec3f& diffuse, vec3f& specular)
 {
-    // Uniforms
-    const vec4f u_ScaleDiffBaseMR = make_vec4f(0.f);
-    const vec4f u_ScaleFGDSpec = make_vec4f(0.f);
-    const vec3f u_LightColor = make_vec3f(1.0f, 0.8f, 0.5f) * 2.0f;
-    const float u_exponent = 1.f / 2.2f;
+    const vec3f dielectricSpecular = make_vec3f(0.04f);
+    const vec3f BLACK = make_vec3f(0.f);
 
-    // For typical incident reflectance range (between 4% to 100%) set the
-    // grazing reflectance to 100% for typical fresnel effect. For very low
-    // reflectance range on highly diffuse objects (below 4%), incrementally
-    // reduce grazing reflecance to 0%.
+    const vec3f H = normalize(L + V);
 
-    vec3f f0 = make_vec3f(0.04f);
-    diffuseColor = make_vec3f(baseColor) * (make_vec3f(1.f) - f0);
-    diffuseColor = diffuseColor * (1.f - metallic);
-    specularColor = mix(f0, make_vec3f(baseColor), metallic);
+    float NoH = dot(N, H);
+    float VoH = dot(V, H);
+    float NoL = dot(N, L);
+    float NoV = dot(N, V);
 
-    specularExponent = 10.f;
+    const vec3f F0 = mix(dielectricSpecular, baseColor, make_vec3f(metallic));
+    const vec3f cDiff = mix(baseColor * (1.f - dielectricSpecular.x), BLACK,
+                            make_vec3f(metallic));
+    float alpha = roughness * roughness;
+    float alphaSq = alpha * alpha;
 
-    // Compute reflectance
-    const float reflectance =
-        max(max(specularColor.x, specularColor.y), specularColor.z);
+    // Schlick's approximation
+    const vec3f F = F0 + (make_vec3f(1.f) - F0) * pow((1.f - VoH), 5.f);
 
-    const float alphaRoughness = roughness * roughness;
-    const float reflectance90 = clamp(reflectance * 25.f, 0.f, 1.f);
+    diffuse = clamp((make_vec3f(1.f) - F) * (cDiff / PI), make_vec3f(0.f),
+                    make_vec3f(1.f));
 
-    const vec3f specularEnvironmentR0 = specularColor;
-    const vec3f specularEnvironmentR90 = make_vec3f(1.f) * reflectance90;
+    const float G = SmithJoint_G(alphaSq, NoL, NoV);
+    const float D = GGX_D(alphaSq, NoH);
 
-    const vec3f h = normalize(surfaceToLight + surfaceToCamera);
-    const float NdotL = clamp(dot(normal, surfaceToLight), 0.001f, 1.f);
-    const float NdotV = abs(dot(normal, surfaceToCamera)) + 0.001f;
-    const float NdotH = clamp(dot(normal, h), 0.f, 1.f);
-    const float LdotH = clamp(dot(surfaceToLight, h), 0.f, 1.f);
-    const float VdotH = clamp(dot(surfaceToCamera, h), 0.f, 1.f);
-
-    reflected = neg(normalize(reflectedVector(surfaceToCamera, normal)));
-
-    PBRInfo pbrInputs = {NdotL,
-                         NdotV,
-                         NdotH,
-                         LdotH,
-                         VdotH,
-                         roughness,
-                         metallic,
-                         specularEnvironmentR0,
-                         specularEnvironmentR90,
-                         alphaRoughness,
-                         diffuseColor,
-                         specularColor};
-
-    // Calculate the shading terms for the microfacet specular shading model
-    const vec3f F = specularReflection(pbrInputs);
-    const float G = geometricOcclusion(pbrInputs);
-    const float D = microfacetDistribution(pbrInputs);
-
-    // Calculation of analytical lighting contribution
-    const vec3f diffuseContrib = (1.f - F) * diffuse(pbrInputs);
-    const vec3f specContrib = F * G * D / (4.f * NdotL * NdotV);
-
-    // Obtain final intensity as reflectance (BRDF) scaled by the energy of the
-    // light (cosine law)
-    vec3f color = NdotL * u_LightColor * (diffuseContrib + specContrib);
-
-    // This section uses mix to override final color for reference app
-    // visualization of various parameters in the lighting equation.
-    color = mix(color, F, u_ScaleFGDSpec.x);
-    color = mix(color, make_vec3f(G), u_ScaleFGDSpec.y);
-    color = mix(color, make_vec3f(D), u_ScaleFGDSpec.z);
-    color = mix(color, specContrib, u_ScaleFGDSpec.w);
-
-    color = mix(color, diffuseContrib, u_ScaleDiffBaseMR.x);
-    color = mix(color, make_vec3f(baseColor), u_ScaleDiffBaseMR.y);
-    color = mix(color, make_vec3f(metallic), u_ScaleDiffBaseMR.z);
-    color = mix(color, make_vec3f(roughness), u_ScaleDiffBaseMR.w);
-
-    diffuseColor =
-        make_vec3f(pow(color.x, u_exponent), pow(color.y, u_exponent),
-                   pow(color.z, u_exponent));
+    specular = clamp((F * G * D) / (4.f * NoL * NoV), make_vec3f(0.f),
+                     make_vec3f(1.f));
 }
 
 /**
@@ -206,117 +127,172 @@ inline vec3f PbrRenderer_shadeRay(const uniform PbrRenderer* uniform self,
                                   varying ScreenSample& sample)
 {
     Ray ray = sample.ray;
-    varying vec3f color = make_vec3f(0.f);
+    vec3f color = make_vec3f(0.f);
 
     sample.z = inf;
     sample.alpha = 0.f;
+    int depth = 0;
+    float pathOpacity = 1.f;
+    float oldRefraction = 1.f;
 
-    traceRay(self->abstract.super.model, ray);
-
-    RTCScene data = (RTCScene)self->abstract.super.model->embreeSceneHandle;
-    void* d = rtcGetUserData(data, 0);
-
-    if (ray.geomID < 0)
+    while (depth < NB_MAX_REBOUNDS && pathOpacity > 0.f)
     {
-        // No intersection. Return skybox color
-        color = make_vec3f(
-            skyboxMapping((Renderer*)self, ray, self->abstract.bgMaterial));
-        sample.alpha = 0.f;
-        return color;
-    }
+        traceRay(self->abstract.super.model, ray);
 
-    DifferentialGeometry dg;
-    postIntersect(self->abstract.super.model, dg, ray,
-                  DG_NS | DG_NG | DG_NORMALIZE | DG_FACEFORWARD |
-                      DG_MATERIALID | DG_COLOR);
-
-    uniform Material* material = dg.material;
-    uniform ExtendedOBJMaterial* objMaterial =
-        (uniform ExtendedOBJMaterial*)material;
-
-    // Light direction
-    const vec3f intersection = dg.P + self->abstract.super.epsilon * dg.Ns;
-    const vec3f headLight = normalize(ray.org - intersection);
-    const vec3f normal = dg.Ns;
-    vec3f diffuseColor = make_vec3f(0.f);
-
-    if (!objMaterial)
-        diffuseColor = make_vec3f(dg.color);
-    else
-        foreach_unique(mat in objMaterial)
+        if (ray.geomID < 0)
         {
-            // Diffuse color and opacity
-            diffuseColor = mat->diffuse * make_vec3f(dg.color);
-            float opacity = mat->opacity;
-            if (valid(mat->map_diffuse))
+            // No intersection. Return skybox color
+            color = color * (1.f - pathOpacity) +
+                    pathOpacity *
+                        make_vec3f(skyboxMapping((Renderer*)self, ray,
+                                                 self->abstract.bgMaterial));
+
+            sample.z = inf;
+            sample.alpha = 0.f;
+            break;
+        }
+        if (depth == 0)
+            sample.z = ray.t;
+
+        DifferentialGeometry dg;
+        postIntersect(self->abstract.super.model, dg, ray,
+                      DG_NG | DG_NS | DG_NORMALIZE | DG_FACEFORWARD |
+                          DG_TANGENTS | DG_MATERIALID | DG_COLOR | DG_TEXCOORD);
+
+        uniform Material* material = dg.material;
+        uniform ExtendedOBJMaterial* objMaterial =
+            (uniform ExtendedOBJMaterial*)material;
+
+        const vec3f intersection = dg.P;
+        const vec3f headLight = normalize(intersection - ray.org);
+        const vec3f normal = dg.Ns;
+        vec3f diffuseColor = make_vec3f(0.f);
+        vec3f specularColor = make_vec3f(0.f);
+        float shininess = 0.f;
+
+        float refraction = 1.f;
+        float reflection = 0.f;
+        float opacity = 1.f;
+        float cosNL = 1.f;
+
+        if (!objMaterial)
+        {
+            diffuseColor = make_vec3f(dg.color);
+            opacity = dg.color.w;
+        }
+        else
+            foreach_unique(mat in objMaterial)
             {
-                const vec4f diffuseFromMap = get4f(mat->map_diffuse, dg.st);
-                diffuseColor = diffuseColor * make_vec3f(diffuseFromMap);
-                opacity *= diffuseFromMap.w;
-            }
-
-            // Shininess
-            float shininess = 0.f;
-            if (valid(mat->map_shininess))
-                shininess = mat->shininess * get1f(mat->map_shininess, dg.st);
-
-            // Specular color
-            vec3f specularColor = make_vec3f(0.f);
-            if (shininess > 0.f)
-            {
-                specularColor = mat->specular;
-                if (valid(mat->map_specular))
-                    specularColor =
-                        mat->specular * get3f(mat->map_specular, dg.st);
-            }
-
-            // Reflection index
-            float reflection = mat->refraction;
-            if (valid(mat->map_reflection))
-                reflection =
-                    mat->reflection * get1f(mat->map_reflection, dg.st);
-
-            // Metallic roughness
-            if (valid(mat->map_metal) && self->abstract.shadingEnabled)
-            {
-                const vec4f value = get4f(mat->map_metal, dg.st);
-                const float roughness = value.y * mat->pbrRoughnessFactor;
-                const float metallic = value.z * mat->pbrMetallicFactor;
-
-                if (self->abstract.shadows == 0.f)
-                    processMetallicRoughness(metallic, diffuseColor,
-                                             specularColor, shininess,
-                                             reflection);
-                else
+                // Diffuse color and opacity
+                diffuseColor = make_vec3f(dg.color) * mat->diffuse;
+                opacity *= mat->opacity;
+                if (valid(mat->map_diffuse))
                 {
-                    const vec3f surfaceToCamera =
-                        normalize(intersection - ray.org);
+                    const vec4f diffuseFromMap = get4f(mat->map_diffuse, dg.st);
+                    diffuseColor = diffuseColor * make_vec3f(diffuseFromMap);
+                    opacity *= diffuseFromMap.w;
+                }
+                // Shininess
+                shininess = mat->shininess;
+                if (valid(mat->map_shininess))
+                    shininess *= get1f(mat->map_shininess, dg.st);
 
-                    // TODO: Fix vector to light
-                    const vec3f surfaceToLight =
-                        normalize(ray.org - intersection);
+                // Specular color
+                if (shininess > 0.f)
+                {
+                    specularColor = mat->specular;
+                    if (valid(mat->map_specular))
+                        specularColor =
+                            specularColor * get3f(mat->map_specular, dg.st);
+                }
 
-                    const vec4f baseColor = make_vec4f(diffuseColor, opacity) *
-                                            mat->pbrBaseColorFactor;
+                // Reflection index
+                reflection = mat->reflection;
+                if (valid(mat->map_reflection))
+                    reflection *= get1f(mat->map_reflection, dg.st);
 
-                    vec3f reflectedNormal;
-                    processMetallicRoughness(normal, surfaceToCamera, headLight,
-                                             baseColor, roughness, metallic,
-                                             diffuseColor, specularColor,
-                                             shininess, reflection,
-                                             reflectedNormal);
+                // Refraction
+                refraction = mat->refraction;
+
+                // Metallic roughness
+                if (valid(mat->map_metal))
+                {
+                    const vec4f value = get4f(mat->map_metal, dg.st);
+                    const float roughnessFactor =
+                        value.y * mat->pbrRoughnessFactor;
+                    const float metallicFactor =
+                        value.z * mat->pbrMetallicFactor;
+
+                    const vec3f eyeToSurface =
+                        normalize(intersection - sample.ray.org);
+
+                    const vec3f baseColor =
+                        make_vec3f(get4f(mat->map_diffuse, dg.st) *
+                                   mat->pbrBaseColorFactor);
+
+                    BRDF(headLight, eyeToSurface, normal, baseColor,
+                         metallicFactor, roughnessFactor, diffuseColor,
+                         specularColor);
+
+                    reflection = max(max(specularColor.x, specularColor.y),
+                                     specularColor.z);
+                }
+                else
+                    cosNL = max(0.f, dot(headLight, normal));
+
+                // Light emission intensity
+                if (valid(mat->map_emission))
+                {
+                    const vec4f value = get4f(mat->map_emission, dg.st);
+                    diffuseColor = diffuseColor + make_vec3f(value) * value.w;
                 }
             }
+
+        const vec3f reflectedVector =
+            ray.dir - 2.f * dot(ray.dir, normal) * normal;
+
+        // Specular color
+        if (shininess > 0.f)
+        {
+            const float cosLR = dot(headLight, reflectedVector);
+            specularColor = specularColor * powf(cosLR, shininess);
         }
 
-    // Head-light Pbr shading
-    const float angle = max(0.f, dot(headLight, normal));
-    color = diffuseColor * angle;
-    sample.alpha = 1.f;
+        // Shading
+        diffuseColor = cosNL * diffuseColor + specularColor;
 
-    // Z-Depth
-    sample.z = ray.t;
-    sample.alpha = 1.f;
+        // Compute color contribution
+        color = diffuseColor * pathOpacity + color * (1.f - pathOpacity);
+
+        // Prepare for next ray iteration
+        if (opacity < 1.f)
+        {
+            const vec3f refracted =
+                refractedVector(ray.dir, normal, oldRefraction, refraction);
+            setRay(ray, intersection, refracted);
+
+            pathOpacity *= 1.f - opacity;
+            oldRefraction = refraction;
+        }
+        else if (reflection > 0.f)
+        {
+            setRay(ray, intersection, reflectedVector);
+            pathOpacity *= reflection;
+        }
+        else
+            break;
+
+        ray.t0 = self->abstract.super.epsilon;
+        ray.t = inf;
+        ray.primID = -1;
+        ray.geomID = -1;
+        ray.instID = -1;
+
+        ++depth;
+    }
+
+    // Alpha
+    sample.alpha = pathOpacity;
 
     return color;
 }

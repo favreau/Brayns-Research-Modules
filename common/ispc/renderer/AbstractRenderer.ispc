@@ -60,18 +60,17 @@ inline bool launchRandomRay(
     return true;
 }
 
-inline vec3f refractedVector(const varying vec3f& direction,
-                             const varying vec3f& normal,
-                             const varying float n1, const varying float n2)
+inline vec3f refractedVector(const vec3f& indicent, const vec3f& normal,
+                             const float n1, const float n2)
 {
-    if (n2 == 0.f)
-        return direction;
+    if (n2 == 0.f || n1 == n2)
+        return indicent;
     const float eta = n1 / n2;
-    const float cos1 = -dot(direction, normal);
+    const float cos1 = -dot(indicent, normal);
     const float cos2 = 1.f - eta * eta * (1.f - cos1 * cos1);
     if (cos2 > 0.f)
-        return eta * direction + (eta * cos1 - sqrt(cos2)) * normal;
-    return direction;
+        return eta * indicent + (eta * cos1 - sqrt(cos2)) * normal;
+    return indicent;
 }
 
 inline bool indirectShading(const uniform AbstractRenderer* uniform self,
