@@ -325,9 +325,8 @@ export void* uniform PathTracingRenderer_create(void* uniform cppE)
 
 export void PathTracingRenderer_set(
     void* uniform _self, void* uniform bgMaterial,
-    const uniform float& timestamp, const uniform int& spp,
-    void** uniform lights, uniform int32 numLights,
-    const uniform float& ambientOcclusionStrength,
+    const uniform float& timestamp, void** uniform lights,
+    uniform int32 numLights, const uniform float& ambientOcclusionStrength,
     const uniform float& ambientOcclusionDistance)
 {
     uniform PathTracingRenderer* uniform self =
@@ -339,7 +338,6 @@ export void PathTracingRenderer_set(
     self->abstract.ambientOcclusionStrength = ambientOcclusionStrength;
     self->abstract.ambientOcclusionDistance = ambientOcclusionDistance;
     self->abstract.timestamp = timestamp;
-    self->abstract.spp = spp;
 
     self->abstract.lights = (const uniform Light* uniform* uniform)lights;
     self->abstract.numLights = numLights;

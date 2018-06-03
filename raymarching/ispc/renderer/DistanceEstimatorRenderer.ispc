@@ -316,10 +316,9 @@ export void DistanceEstimatorRenderer_set(
     const uniform float& ambientOcclusionStrength,
     const uniform float& ambientOcclusionDistance,
     const uniform bool& shadingEnabled, const uniform int& randomNumber,
-    const uniform float& timestamp, const uniform int& spp,
-    const uniform bool& electronShadingEnabled, void** uniform lights,
-    const uniform int32 numLights, const uniform int32& volumeSamplesPerRay,
-    uniform vec4f* uniform colormap,
+    const uniform float& timestamp, const uniform bool& electronShadingEnabled,
+    void** uniform lights, const uniform int32 numLights,
+    const uniform int32& volumeSamplesPerRay, uniform vec4f* uniform colormap,
     uniform vec3f* uniform emissionIntensitiesMap,
     const uniform int32 colorMapSize, const uniform float& colorMapMinValue,
     const uniform float& colorMapRange, const uniform float& threshold)
@@ -337,7 +336,6 @@ export void DistanceEstimatorRenderer_set(
     self->abstract.shadingEnabled = shadingEnabled;
     self->abstract.randomNumber = randomNumber;
     self->abstract.timestamp = timestamp;
-    self->abstract.spp = spp;
     self->abstract.electronShadingEnabled = electronShadingEnabled;
 
     self->abstract.lights = (const uniform Light* uniform* uniform)lights;

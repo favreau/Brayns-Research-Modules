@@ -59,7 +59,6 @@ void AbstractRenderer::commit()
     _shadingEnabled = bool(getParam1i("shadingEnabled", 1));
     _randomNumber = getParam1i("randomNumber", 0);
     _timestamp = getParam1f("timestamp", 0.f);
-    _spp = getParam1i("spp", 1);
     _electronShadingEnabled = bool(getParam1i("electronShading", 0));
     _bgMaterial =
         (brayns::obj::ExtendedOBJMaterial*)getParamObject("bgMaterial",

@@ -70,107 +70,85 @@ inline vec3f TransparencyRenderer_shadeRay(
 {
     Ray ray = sample.ray;
     ray.time = inf;
+    sample.z = inf;
 
     float zDepth = 0.f;
-    sample.z = 1.f;
-    sample.alpha = 0.f;
     int depth = 0;
-    float path_opacity = 0.f;
     float opacity = 0.f;
+    float pathOpacity = 0.f;
 
-    vec4f intersectionColor =
-        skyboxMapping((Renderer*)self, ray, self->abstract.bgMaterial);
+    vec4f intersectionColor = make_vec4f(0.f);
+    vec4f colorContribution = make_vec4f(0.f);
 
-    while (path_opacity < 1.f && depth < NB_MAX_REBOUNDS)
+    while (pathOpacity < 1.f)
     {
         traceRay(self->abstract.super.model, ray);
 
         if (ray.geomID < 0)
         {
             // No intersection
-            sample.z = 1.f - log(zDepth) / 10.f;
+            colorContribution =
+                skyboxMapping((Renderer*)self, ray, self->abstract.bgMaterial);
+            colorContribution.w = 1.f;
+            composite(colorContribution, intersectionColor);
             break;
         }
-        else
+
+        // Intersection found
+        // Retreive information about the geometry, typically geometry ID,
+        // normal to the surface, material ID, texture coordinates, etc.
+        DifferentialGeometry dg;
+        postIntersect(self->abstract.super.model, dg, ray,
+                      DG_NG | DG_NS | DG_NORMALIZE | DG_FACEFORWARD |
+                          DG_MATERIALID | DG_COLOR | DG_TEXCOORD);
+
+        const uniform Material* material = dg.material;
+        const uniform ExtendedOBJMaterial* objMaterial =
+            (const uniform ExtendedOBJMaterial*)material;
+        vec3f Kd;
+        if (!objMaterial)
         {
-            // Intersection found
-            if (depth == 0)
-                sample.alpha = 1.f;
-
-            // Retreive information about the geometry, typically geometry ID,
-            // normal to the surface, material ID, texture coordinates, etc.
-            DifferentialGeometry dg;
-            postIntersect(self->abstract.super.model, dg, ray,
-                          DG_NG | DG_NS | DG_NORMALIZE | DG_FACEFORWARD |
-                              DG_MATERIALID | DG_COLOR | DG_TEXCOORD);
-
-            if (depth == 0)
-                sample.z = ray.primID;
-
-            const uniform Material* material = dg.material;
-            const uniform ExtendedOBJMaterial* objMaterial =
-                (const uniform ExtendedOBJMaterial*)material;
-            vec3f Kd;
-            if (!objMaterial)
-            {
-                Kd = make_vec3f(dg.color);
-                opacity = dg.color.w;
-            }
-            else
-                foreach_unique(mat in objMaterial)
-                {
-                    Kd = mat->diffuse;
-                    opacity = mat->opacity;
-                }
-
-            //            if (objMaterial->castSimulationData)
-            {
-                if (opacity > 0.f)
-                {
-                    // Get simulation value from geometry
-                    const vec4f simulationValue =
-                        getSimulationValue(self, dg, ray.primID);
-
-                    // Color contribution
-                    vec4f colorContribution =
-                        make_vec4f(Kd * opacity +
-                                       make_vec3f(simulationValue) *
-                                           (1.f - opacity),
-                                   opacity);
-
-                    // Head-light shading
-                    const vec3f intersection =
-                        dg.P + self->abstract.super.epsilon * dg.Ns;
-                    const vec3f headLight = normalize(ray.org - intersection);
-                    colorContribution =
-                        colorContribution * max(0.f, dot(headLight, dg.Ns));
-
-                    composite(colorContribution, intersectionColor);
-                }
-            }
-            //            else
-            //                composite(make_vec4f(Kd, opacity),
-            //                intersectionColor);
-
-            path_opacity += opacity;
-
-            // Z-Depth
-            zDepth += opacity * ray.t;
-            sample.z = log(zDepth) / 10.f;
-
-            // Next ray
-            ray.t0 = ray.t + self->abstract.super.epsilon;
-            ray.t = infinity;
-            ray.primID = -1;
-            ray.geomID = -1;
-            ray.instID = -1;
+            Kd = make_vec3f(dg.color);
+            opacity = dg.color.w;
         }
+        else
+            foreach_unique(mat in objMaterial)
+            {
+                Kd = make_vec3f(dg.color) * mat->diffuse;
+                opacity = dg.color.w * mat->opacity;
+            }
+
+        if (self->abstract.electronShadingEnabled)
+            opacity = 0.2f;
+
+        if (depth == 0)
+        {
+            pathOpacity = opacity;
+            sample.z = ray.t;
+        }
+        pathOpacity *= 1.f + opacity;
+
+        // Head-light shading
+        const float cosNL = max(0.f, dot(neg(ray.dir), dg.Ns));
+        colorContribution = make_vec4f(Kd * cosNL, pathOpacity);
+
+        if (objMaterial->castSimulationData)
+            // Get simulation value from geometry
+            colorContribution = getSimulationValue(self, dg, ray.primID);
+
+        composite(colorContribution, intersectionColor);
+
+        // Next ray
+        ray.t0 = ray.t + dg.epsilon;
+        ray.t = infinity;
+        ray.primID = -1;
+        ray.geomID = -1;
+        ray.instID = -1;
         ++depth;
     }
 
-    // Z-Depth
-    if (depth >= NB_MAX_REBOUNDS)
-        sample.z = 1.f - log(zDepth) / 10.f;
+    // Alpha
+    sample.alpha = pathOpacity;
 
     return make_vec3f(intersectionColor);
 }
@@ -198,7 +176,8 @@ export void* uniform TransparencyRenderer_create(void* uniform cppE)
 export void TransparencyRenderer_set(
     void* uniform _self, void* uniform bgMaterial,
     const uniform int& randomNumber, const uniform float& timestamp,
-    const uniform int& spp, uniform float* uniform simulationData,
+    const uniform int& spp, const uniform int& electronShadingEnabled,
+    uniform float* uniform simulationData,
     const uniform int64 simulationDataSize, uniform vec4f* uniform colormap,
     uniform vec3f* uniform emissionIntensitiesMap,
     const uniform int32 colorMapSize, const uniform float& colorMapMinValue,
@@ -213,6 +192,7 @@ export void TransparencyRenderer_set(
     self->abstract.randomNumber = randomNumber;
     self->abstract.timestamp = timestamp;
     self->abstract.spp = spp;
+    self->abstract.electronShadingEnabled = electronShadingEnabled;
 
     self->abstract.volumeData = 0;
 

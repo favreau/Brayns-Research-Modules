@@ -259,16 +259,20 @@ inline varying vec4f
             }
 
             // Compose final voxel color
-            composite(voxelColor, pathColor, 1.f);
+            composite(voxelColor, pathColor, 0.5f);
         }
     }
-    // Do not affect Alpha
-    pathColor.x *= shadowContribution;
-    pathColor.y *= shadowContribution;
-    pathColor.z *= shadowContribution;
+
+    if (shadowContribution < 1.f)
+    {
+        // Do not affect Alpha
+        pathColor.x *= shadowContribution;
+        pathColor.y *= shadowContribution;
+        pathColor.z *= shadowContribution;
+    }
 
     // Compose with background
-    composite(bgColor, pathColor, 1.f);
+    composite(bgColor, pathColor, 0.5f);
 
     return pathColor;
 }
@@ -453,7 +457,7 @@ inline varying vec4f getVolumeShadedContribution(
     }
 
     // Ambient light
-    shadowContribution = min(1.f, shadowContribution + AMBIENT_LIGHT);
+    shadowContribution = clamp(shadowContribution + AMBIENT_LIGHT, 0.f, 1.f);
     pathColor.x *= shadowContribution;
     pathColor.y *= shadowContribution;
     pathColor.z *= shadowContribution;
@@ -467,7 +471,7 @@ inline varying vec4f getVolumeShadedContribution(
     }
 
     // Compose with background
-    composite(bgColor, pathColor, 1.f);
+    composite(bgColor, pathColor, 0.5f);
 
     return pathColor;
 }

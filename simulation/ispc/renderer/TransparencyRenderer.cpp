@@ -47,7 +47,7 @@ void TransparencyRenderer::commit()
 
     ispc::TransparencyRenderer_set(
         getIE(), (_bgMaterial ? _bgMaterial->getIE() : nullptr), _randomNumber,
-        _timestamp, _spp,
+        _timestamp, spp, _electronShadingEnabled,
         _simulationData ? (float*)_simulationData->data : NULL,
         _simulationDataSize,
         _transferFunctionDiffuseData

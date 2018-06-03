@@ -74,7 +74,7 @@ inline vec3f CartoonRenderer_shadeRay(
             mat->diffuse * make_vec3f(dg.color);
 
     // Head-light cartoon shading
-    const vec3f intersection = dg.P + self->abstract.super.epsilon * dg.Ns;
+    const vec3f intersection = dg.P + dg.epsilon * dg.Ns;
     const vec3f headLight = normalize(ray.org - intersection);
     const float angle = max(0.f, dot(headLight, dg.Ns));
     const unsigned int angleAsInt = angle * GRADIENT_SIZE;

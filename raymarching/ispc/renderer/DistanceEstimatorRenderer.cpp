@@ -51,9 +51,8 @@ void DistanceEstimatorRenderer::commit()
     ispc::DistanceEstimatorRenderer_set(
         getIE(), (_bgMaterial ? _bgMaterial->getIE() : nullptr), _shadows,
         _softShadows, _ambientOcclusionStrength, _ambientOcclusionDistance,
-        _shadingEnabled, _randomNumber, _timestamp, _spp,
-        _electronShadingEnabled, _lightPtr, _lightArray.size(),
-        _volumeSamplesPerRay,
+        _shadingEnabled, _randomNumber, _timestamp, _electronShadingEnabled,
+        _lightPtr, _lightArray.size(), _volumeSamplesPerRay,
         _transferFunctionDiffuseData
             ? (ispc::vec4f*)_transferFunctionDiffuseData->data
             : NULL,

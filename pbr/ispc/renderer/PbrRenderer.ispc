@@ -317,8 +317,7 @@ export void* uniform PbrRenderer_create(void* uniform cppE)
 
 export void PbrRenderer_set(void* uniform _self, void* uniform bgMaterial,
                             const uniform float& timestamp,
-                            const uniform int& spp, void** uniform lights,
-                            uniform int32 numLights)
+                            void** uniform lights, uniform int32 numLights)
 {
     uniform PbrRenderer* uniform self = (uniform PbrRenderer * uniform)_self;
 
@@ -326,7 +325,6 @@ export void PbrRenderer_set(void* uniform _self, void* uniform bgMaterial,
         (uniform ExtendedOBJMaterial * uniform)bgMaterial;
 
     self->abstract.timestamp = timestamp;
-    self->abstract.spp = spp;
 
     self->abstract.lights = (const uniform Light* uniform* uniform)lights;
     self->abstract.numLights = numLights;
