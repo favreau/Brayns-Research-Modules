@@ -22,8 +22,11 @@
 #include <common/ispc/renderer/AbstractRenderer.ih>
 
 //#define REFRACTION
+//#define VOLUME_16BITS
+
 const float GI_OPACITY_THRESHOLD = 0.01f;
 const float AMBIENT_LIGHT = 0.25f;
+const float ALPHA = 1.2f;
 
 struct VolumeRenderer
 {
@@ -188,8 +191,8 @@ inline varying vec4f getVoxelColor(const uniform VolumeRenderer* uniform self,
                      self->volumeDimensions.y);
 
 // Voxel raw value
-#if VOLUME_16BITS
-    const uint8 voxelValue = self->volumeData[index * 2];
+#ifdef VOLUME_16BITS
+    const uint8 value = self->volumeData[index * 2];
 #else
     const uint8 voxelValue = self->volumeData[index];
 #endif
@@ -227,6 +230,7 @@ inline varying vec4f
         return bgColor;
 
     // Ray marching
+    t0 = max(0.f, t0);
     vec4f pathColor = make_vec4f(0.f);
     const float epsilon = getEpsilon(self, t1 - t0, sample.sampleID.z);
     const float random = getRandomValue(sample, self->randomNumber) * epsilon;
@@ -259,7 +263,7 @@ inline varying vec4f
             }
 
             // Compose final voxel color
-            composite(voxelColor, pathColor, 0.5f);
+            composite(voxelColor, pathColor);
         }
     }
 
@@ -272,7 +276,7 @@ inline varying vec4f
     }
 
     // Compose with background
-    composite(bgColor, pathColor, 0.5f);
+    composite(bgColor, pathColor);
 
     return pathColor;
 }
@@ -303,9 +307,9 @@ inline varying vec4f getVolumeShadedContribution(
         return bgColor;
 
     // Ray marching
+    t0 = max(0.f, t0);
     const float epsilon = getEpsilon(self, t1 - t0, sample.sampleID.z);
     const float random = getRandomValue(sample, self->randomNumber) * epsilon;
-    const vec3f neighbourEpsilon = self->volumeElementSpacing * epsilon;
     t0 -= random;
     t1 -= random;
     float shadowContribution = 1.f;
@@ -333,7 +337,8 @@ inline varying vec4f getVolumeShadedContribution(
         for (int i = 0; i < min(15, max(7, sample.sampleID.z)); ++i)
         {
             const vec3f neighbour =
-                ((ray.org + positions[i] * neighbourEpsilon + ray.dir * t) -
+                ((ray.org + positions[i] * self->volumeElementSpacing +
+                  ray.dir * t) -
                  self->volumeOffset) /
                 self->volumeElementSpacing;
 
@@ -360,7 +365,6 @@ inline varying vec4f getVolumeShadedContribution(
             }
             else
                 normal = normal + positions[i];
-
             ++count;
         }
         voxelColor = voxelColor / count;
@@ -385,11 +389,7 @@ inline varying vec4f getVolumeShadedContribution(
         {
             float angle;
             if (self->electronShadingEnabled)
-            {
-                const vec3f viewer = normalize(sample.ray.org - point);
-                const float el = max(0.f, dot(viewer, normal));
-                angle = 1.f - el;
-            }
+                angle = 1.f - max(0.f, dot(neg(ray.dir), normal));
             else
             {
                 // Shading according to computed normal
@@ -416,7 +416,8 @@ inline varying vec4f getVolumeShadedContribution(
                         powf(max(0.f, dot(lightDirection, reflectedNormal)),
                              20.f);
                     angle = max(angle, specularAngle);
-                    specularColor = make_vec4f(make_vec3f(specularAngle), 0.f);
+                    specularColor =
+                        make_vec4f(0.5f * make_vec3f(specularAngle), 0.f);
                 }
             }
 
@@ -453,7 +454,7 @@ inline varying vec4f getVolumeShadedContribution(
 #endif
 
         // Compose final voxel color
-        composite(voxelColor, pathColor, 0.5f);
+        composite(voxelColor, pathColor);
     }
 
     // Ambient light
@@ -471,7 +472,8 @@ inline varying vec4f getVolumeShadedContribution(
     }
 
     // Compose with background
-    composite(bgColor, pathColor, 0.5f);
+    pathColor = ALPHA * pathColor;
+    composite(bgColor, pathColor);
 
     return pathColor;
 }
