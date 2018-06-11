@@ -192,7 +192,9 @@ inline varying vec4f getVoxelColor(const uniform VolumeRenderer* uniform self,
 
 // Voxel raw value
 #ifdef VOLUME_16BITS
-    const uint8 value = self->volumeData[index * 2];
+    const uint8 lo = self->volumeData[index * 2];
+    const uint8 hi = self->volumeData[index * 2 + 1];
+    const uint16 voxelValue = (hi * 256 + lo) / 2;
 #else
     const uint8 voxelValue = self->volumeData[index];
 #endif
@@ -334,7 +336,7 @@ inline varying vec4f getVolumeShadedContribution(
         vec4f voxelColor = make_vec4f(0.f);
         unsigned int count = 1;
         float voxelOpacity = 0.f;
-        for (int i = 0; i < min(15, max(7, sample.sampleID.z)); ++i)
+        for (int i = 0; i < min(15, max(5, sample.sampleID.z)); ++i)
         {
             const vec3f neighbour =
                 ((ray.org + positions[i] * self->volumeElementSpacing +
