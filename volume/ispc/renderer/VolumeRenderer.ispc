@@ -22,7 +22,7 @@
 #include <common/ispc/renderer/AbstractRenderer.ih>
 
 //#define REFRACTION
-//#define VOLUME_16BITS
+#define VOLUME_16BITS
 
 const float GI_OPACITY_THRESHOLD = 0.01f;
 const float AMBIENT_LIGHT = 0.25f;
@@ -484,10 +484,9 @@ inline vec3f VolumeRenderer_shadeRay(const uniform VolumeRenderer* uniform self,
                                      varying ScreenSample& sample)
 {
     Ray ray = sample.ray;
-    vec3f color = self->bgColor;
+    vec4f color = make_vec4f(self->bgColor, 0.f);
 
     sample.z = inf;
-    sample.alpha = 0.f;
 
     // Trace ray
     traceRay(self->super.model, ray);
@@ -495,10 +494,11 @@ inline vec3f VolumeRenderer_shadeRay(const uniform VolumeRenderer* uniform self,
     // Volume contribution
     if (self->volumeData)
         color = (self->shadingEnabled || self->electronShadingEnabled)
-                    ? make_vec3f(getVolumeShadedContribution(self, ray, sample))
-                    : make_vec3f(getVolumeContribution(self, ray, sample));
+                    ? getVolumeShadedContribution(self, ray, sample)
+                    : getVolumeContribution(self, ray, sample);
 
-    return color;
+    sample.alpha = color.w;
+    return make_vec3f(color);
 }
 
 void VolumeRenderer_renderSample(uniform Renderer* uniform _self,
