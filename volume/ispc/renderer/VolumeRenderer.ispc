@@ -22,11 +22,12 @@
 #include <common/ispc/renderer/AbstractRenderer.ih>
 
 //#define REFRACTION
-#define VOLUME_16BITS
+//#define VOLUME_16BITS
 
 const float GI_OPACITY_THRESHOLD = 0.01f;
 const float AMBIENT_LIGHT = 0.25f;
 const float ALPHA = 1.2f;
+const bool VOXEL_COLOR_EXTRAPOLATION = true;
 
 struct VolumeRenderer
 {
@@ -235,13 +236,16 @@ inline varying vec4f
     t0 = max(0.f, t0);
     vec4f pathColor = make_vec4f(0.f);
     const float epsilon = getEpsilon(self, t1 - t0, sample.sampleID.z);
+#ifdef RANDOM
     const float random = getRandomValue(sample, self->randomNumber) * epsilon;
     t0 -= random;
     t1 -= random;
+#endif
     float shadowContribution = 1.f;
     bool shadowProcessed = false;
 
-    for (float t = t0; t < t1 && pathColor.w < 1.f; t += epsilon)
+    float t = t0;
+    for (t = t0; t < t1 && pathColor.w < 1.f; t += epsilon)
     {
         const vec3f point = ((ray.org + ray.dir * t) - self->volumeOffset) /
                             self->volumeElementSpacing;
@@ -268,6 +272,9 @@ inline varying vec4f
             composite(voxelColor, pathColor);
         }
     }
+
+    // Z depth
+    sample.z = t;
 
     if (shadowContribution < 1.f)
     {
@@ -311,9 +318,11 @@ inline varying vec4f getVolumeShadedContribution(
     // Ray marching
     t0 = max(0.f, t0);
     const float epsilon = getEpsilon(self, t1 - t0, sample.sampleID.z);
+#ifdef RANDOM
     const float random = getRandomValue(sample, self->randomNumber) * epsilon;
     t0 -= random;
     t1 -= random;
+#endif
     float shadowContribution = 1.f;
     bool shadowProcessed = false;
 
@@ -330,16 +339,20 @@ inline varying vec4f getVolumeShadedContribution(
                   self->volumeElementSpacing;
 #endif
 
-    for (float t = t0; t < t1 && pathColor.w < 1.f; t += epsilon)
+    float t = t0;
+    for (t = t0; t < t1 && pathColor.w < 1.f; t += epsilon)
     {
         vec3f normal = make_vec3f(0.f);
         vec4f voxelColor = make_vec4f(0.f);
         unsigned int count = 1;
         float voxelOpacity = 0.f;
-        for (int i = 0; i < min(15, max(5, sample.sampleID.z)); ++i)
+        vec4f colorExtrapolation = make_vec4f(0.f);
+        for (int i = 0; i < 15; ++i)
         {
+            const float random =
+                2.f * getRandomValue(sample, self->randomNumber);
             const vec3f neighbour =
-                ((ray.org + positions[i] * self->volumeElementSpacing +
+                ((ray.org + positions[i] * self->volumeElementSpacing * random +
                   ray.dir * t) -
                  self->volumeOffset) /
                 self->volumeElementSpacing;
@@ -359,8 +372,9 @@ inline varying vec4f getVolumeShadedContribution(
                     if (color.w < GI_OPACITY_THRESHOLD)
                         break;
                 }
-                else
-                    voxelColor = voxelColor + color;
+
+                if (VOXEL_COLOR_EXTRAPOLATION)
+                    colorExtrapolation = colorExtrapolation + color;
 
                 // Normal
                 normal = normal + positions[i] * (1.f - color.w);
@@ -369,7 +383,11 @@ inline varying vec4f getVolumeShadedContribution(
                 normal = normal + positions[i];
             ++count;
         }
-        voxelColor = voxelColor / count;
+
+        if (VOXEL_COLOR_EXTRAPOLATION)
+            voxelColor = make_vec4f(make_vec3f(colorExtrapolation) / count,
+                                    voxelColor.w);
+
         normal = normalize(normal);
         voxelColor.w = voxelOpacity;
 
