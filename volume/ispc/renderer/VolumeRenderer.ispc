@@ -299,6 +299,7 @@ inline varying vec4f getVolumeShadedContribution(
     const vec4f bgColor = make_vec4f(self->bgColor, 1.f);
     vec4f specularColor = make_vec4f(0.f);
     vec4f pathColor = make_vec4f(0.f);
+    vec4f accColor = make_vec4f(0.f);
     const vec3f positions[15] = {{0, 0, 0},   {0, -1, 0},   {0, 1, 0},
                                  {-1, 0, 0},  {1, 0, 0},    {0, 0, 1},
                                  {0, 0, -1},  {-1, -1, -1}, {1, -1, -1},
@@ -317,178 +318,186 @@ inline varying vec4f getVolumeShadedContribution(
     if (!intersectBox(self, ray, aabbMin, aabbMax, t0, t1))
         return bgColor;
 
-    // Ray marching
-    t0 = max(0.f, t0);
-    const float epsilon = self->volumeEpsilon;
-    const float random = getRandomValue(sample, self->randomNumber) * epsilon;
-    t0 -= random;
-    t1 -= random;
-    float shadowContribution = 1.f;
-    bool shadowProcessed = false;
+    for (int s = 0; s < self->spp; ++s)
+    {
+        // Ray marching
+        t0 = max(0.f, t0);
+        const float epsilon = self->volumeEpsilon;
+        const float random = getRandomValue(sample, s) * epsilon;
+        t0 -= random;
+        t1 -= random;
+        float shadowContribution = 1.f;
+        bool shadowProcessed = false;
 
 #ifdef REFRACTION
-    float oldRefraction = 1.f;
-    float T = t0;
-    vec3f dir = ray.dir;
-    vec3f origin = ray.org;
-    vec3f oldOrigin = ray.org;
-    vec3f point =
-        ((origin + dir * t0) - self->volumeOffset) / self->volumeElementSpacing;
+        float oldRefraction = 1.f;
+        float T = t0;
+        vec3f dir = ray.dir;
+        vec3f origin = ray.org;
+        vec3f oldOrigin = ray.org;
+        vec3f point = ((origin + dir * t0) - self->volumeOffset) /
+                      self->volumeElementSpacing;
 #else
-    vec3f point = ((ray.org + ray.dir * t0) - self->volumeOffset) /
-                  self->volumeElementSpacing;
+        vec3f point = ((ray.org + ray.dir * t0) - self->volumeOffset) /
+                      self->volumeElementSpacing;
 #endif
 
-    float t = t0;
-    for (t = t0; t < t1 && pathColor.w < 1.f; t += epsilon)
-    {
-        vec3f normal = make_vec3f(0.f);
-        vec4f voxelColor = make_vec4f(0.f);
-        unsigned int count = 1;
-        float voxelOpacity = 0.f;
-        vec4f colorExtrapolation = make_vec4f(0.f);
-        for (int i = 0; i < 15; ++i)
+        float t = t0;
+        for (t = t0; t < t1 && pathColor.w < 1.f; t += epsilon)
         {
-            const float random =
-                2.f * getRandomValue(sample, self->randomNumber);
-            const vec3f neighbour =
-                ((ray.org + positions[i] * self->volumeElementSpacing * random +
-                  ray.dir * t) -
-                 self->volumeOffset) /
-                self->volumeElementSpacing;
-
-            if (pointInVolume(neighbour, self->volumeDimensions))
+            vec3f normal = make_vec3f(0.f);
+            vec4f voxelColor = make_vec4f(0.f);
+            unsigned int count = 1;
+            float voxelOpacity = 0.f;
+            vec4f colorExtrapolation = make_vec4f(0.f);
+            for (int i = 0; i < 15; ++i)
             {
-                // Voxel color
-                const vec4f color = getVoxelColor(self, neighbour);
+                const float random =
+                    2.f * getRandomValue(sample, self->randomNumber);
+                const vec3f neighbour =
+                    ((ray.org +
+                      positions[i] * self->volumeElementSpacing * random +
+                      ray.dir * t) -
+                     self->volumeOffset) /
+                    self->volumeElementSpacing;
 
-                if (i == 0)
+                if (pointInVolume(neighbour, self->volumeDimensions))
                 {
-                    voxelColor = color;
-                    voxelOpacity = color.w;
+                    // Voxel color
+                    const vec4f color = getVoxelColor(self, neighbour);
 
-                    if (color.w > 0.99f)
-                        sample.z = t;
-                    if (color.w < GI_OPACITY_THRESHOLD)
-                        break;
+                    if (i == 0)
+                    {
+                        voxelColor = color;
+                        voxelOpacity = color.w;
+
+                        if (color.w > 0.99f)
+                            sample.z = t;
+                        if (color.w < GI_OPACITY_THRESHOLD)
+                            break;
+                    }
+
+                    colorExtrapolation = colorExtrapolation + color;
+
+                    // Normal
+                    normal = normal + positions[i] * (1.f - color.w);
                 }
-
-                colorExtrapolation = colorExtrapolation + color;
-
-                // Normal
-                normal = normal + positions[i] * (1.f - color.w);
-            }
-            else
-                normal = normal + positions[i];
-            ++count;
-        }
-
-        voxelColor = make_vec4f(ALPHA * make_vec3f(colorExtrapolation) / count,
-                                voxelColor.w);
-
-        normal = normalize(normal);
-        voxelColor.w = voxelOpacity;
-
-        // Shadows
-        if (self->shadows > 0.f && voxelColor.w >= GI_OPACITY_THRESHOLD &&
-            !shadowProcessed)
-        {
-            shadowContribution =
-                getShadowContributions(self, ray, sample, point);
-            shadowProcessed = true;
-        }
-        if (shadowContribution < 0.01f)
-        {
-            pathColor.w = 1.f;
-            break;
-        }
-
-        if (voxelColor.w >= GI_OPACITY_THRESHOLD)
-        {
-            float angle;
-            if (self->electronShadingEnabled)
-                angle = 1.f - max(0.f, dot(neg(ray.dir), normal));
-            else
-            {
-                // Shading according to computed normal
-                for (uniform int i = 0; self->lights && i < self->numLights;
-                     ++i)
-                {
-                    const uniform Light* uniform light = self->lights[i];
-                    const vec2f s = make_vec2f(0.5f);
-                    DifferentialGeometry dg;
-                    dg.P = point;
-                    const varying Light_SampleRes lightSample =
-                        light->sample(light, dg, s);
-                    const vec3f radiance = lightSample.weight;
-                    const vec3f lightDirection = lightSample.dir;
-
-                    // Diffuse
-                    angle = max(0.f, dot(lightDirection, normal));
-
-                    // Specular
-                    const vec3f reflectedNormal = normalize(
-                        ray.dir - 2.f * dot(ray.dir, normal) * normal);
-                    const float specularAngle =
-                        powf(max(0.f, dot(lightDirection, reflectedNormal)),
-                             20.f);
-                    angle = max(angle, specularAngle);
-                    specularColor =
-                        make_vec4f(0.5f * make_vec3f(specularAngle), 0.f);
-                }
+                else
+                    normal = normal + positions[i];
+                ++count;
             }
 
-            // Do not affect Alpha
-            voxelColor.x = voxelColor.x * angle;
-            voxelColor.y = voxelColor.y * angle;
-            voxelColor.z = voxelColor.z * angle;
-        }
+            voxelColor =
+                make_vec4f(ALPHA * make_vec3f(colorExtrapolation) / count,
+                           voxelColor.w);
+
+            normal = normalize(normal);
+            voxelColor.w = voxelOpacity;
+
+            // Shadows
+            if (self->shadows > 0.f && voxelColor.w >= GI_OPACITY_THRESHOLD &&
+                !shadowProcessed)
+            {
+                shadowContribution =
+                    getShadowContributions(self, ray, sample, point);
+                shadowProcessed = true;
+            }
+            if (shadowContribution < 0.01f)
+            {
+                pathColor.w = 1.f;
+                break;
+            }
+
+            if (voxelColor.w >= GI_OPACITY_THRESHOLD)
+            {
+                float angle;
+                if (self->electronShadingEnabled)
+                    angle = 1.f - max(0.f, dot(neg(ray.dir), normal));
+                else
+                {
+                    // Shading according to computed normal
+                    for (uniform int i = 0; self->lights && i < self->numLights;
+                         ++i)
+                    {
+                        const uniform Light* uniform light = self->lights[i];
+                        const vec2f s = make_vec2f(0.5f);
+                        DifferentialGeometry dg;
+                        dg.P = point;
+                        const varying Light_SampleRes lightSample =
+                            light->sample(light, dg, s);
+                        const vec3f radiance = lightSample.weight;
+                        const vec3f lightDirection = lightSample.dir;
+
+                        // Diffuse
+                        angle = max(0.f, dot(lightDirection, normal));
+
+                        // Specular
+                        const vec3f reflectedNormal = normalize(
+                            ray.dir - 2.f * dot(ray.dir, normal) * normal);
+                        const float specularAngle =
+                            powf(max(0.f, dot(lightDirection, reflectedNormal)),
+                                 20.f);
+                        angle = max(angle, specularAngle);
+                        specularColor =
+                            make_vec4f(0.5f * make_vec3f(specularAngle), 0.f);
+                    }
+                }
+
+                // Do not affect Alpha
+                voxelColor.x = voxelColor.x * angle;
+                voxelColor.y = voxelColor.y * angle;
+                voxelColor.z = voxelColor.z * angle;
+            }
 
 #ifdef REFRACTION
-        // Refraction
-        const float refraction =
-            (voxelColor.w > 0.f ? 1.f + self->ambientOcclusionStrength * 0.25f
-                                : 1.f);
-        if (abs(refraction - oldRefraction) > 0.001f)
-        {
-            origin = oldOrigin + dir * T;
-            T = 0.f;
-            oldOrigin = origin;
-            dir = refractedVector(dir, normalize(normal), oldRefraction,
-                                  refraction);
-        }
-        oldRefraction = refraction;
+            // Refraction
+            const float refraction =
+                (voxelColor.w > 0.f
+                     ? 1.f + self->ambientOcclusionStrength * 0.25f
+                     : 1.f);
+            if (abs(refraction - oldRefraction) > 0.001f)
+            {
+                origin = oldOrigin + dir * T;
+                T = 0.f;
+                oldOrigin = origin;
+                dir = refractedVector(dir, normalize(normal), oldRefraction,
+                                      refraction);
+            }
+            oldRefraction = refraction;
 
-        T += epsilon;
-        point = ((origin + dir * T) - self->volumeOffset) /
-                self->volumeElementSpacing;
+            T += epsilon;
+            point = ((origin + dir * T) - self->volumeOffset) /
+                    self->volumeElementSpacing;
 #else
-        point = ((ray.org + ray.dir * t) - self->volumeOffset) /
-                self->volumeElementSpacing;
+            point = ((ray.org + ray.dir * t) - self->volumeOffset) /
+                    self->volumeElementSpacing;
 #endif
 
-        // Compose final voxel color
-        composite(voxelColor, pathColor);
+            // Compose final voxel color
+            composite(voxelColor, pathColor);
+        }
+
+        // Ambient light
+        shadowContribution =
+            clamp(shadowContribution + AMBIENT_LIGHT, 0.f, 1.f);
+        pathColor.x *= shadowContribution;
+        pathColor.y *= shadowContribution;
+        pathColor.z *= shadowContribution;
+
+        if (shadowContribution > 0.9f)
+        {
+            // Specular color
+            pathColor.x = max(pathColor.x, specularColor.x);
+            pathColor.y = max(pathColor.y, specularColor.y);
+            pathColor.z = max(pathColor.z, specularColor.z);
+        }
+
+        // Compose with background
+        composite(bgColor, pathColor);
+
+        accColor = accColor + pathColor;
     }
-
-    // Ambient light
-    shadowContribution = clamp(shadowContribution + AMBIENT_LIGHT, 0.f, 1.f);
-    pathColor.x *= shadowContribution;
-    pathColor.y *= shadowContribution;
-    pathColor.z *= shadowContribution;
-
-    if (shadowContribution > 0.9f)
-    {
-        // Specular color
-        pathColor.x = max(pathColor.x, specularColor.x);
-        pathColor.y = max(pathColor.y, specularColor.y);
-        pathColor.z = max(pathColor.z, specularColor.z);
-    }
-
-    // Compose with background
-    composite(bgColor, pathColor);
-
-    return pathColor;
+    return accColor / self->spp;
 }
 
 inline vec3f VolumeRenderer_shadeRay(const uniform VolumeRenderer* uniform self,

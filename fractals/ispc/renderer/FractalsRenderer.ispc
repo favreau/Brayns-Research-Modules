@@ -28,15 +28,10 @@ struct FractalsRenderer
     // Rendering attributes
     const uniform Light* uniform* uniform lights;
     uint32 numLights;
-    const uniform ExtendedOBJMaterial* uniform* uniform materials;
-    uint32 numMaterials;
     vec3f bgColor;
     float shadows;
     bool shadingEnabled;
     float softShadows;
-    float ambientOcclusionStrength;
-    float ambientOcclusionDistance;
-    bool electronShadingEnabled;
     int randomNumber;
     float timestamp;
     int spp;
@@ -47,7 +42,6 @@ struct FractalsRenderer
     uint32 colorMapSize;
     float colorMapMinValue;
     float colorMapRange;
-    float threshold;
 
     // Volume dimension
     vec3f volumeDimensions;
@@ -76,7 +70,7 @@ inline varying uint8
                          const vec3f& point, const unsigned int iterations)
 {
     const float cRe = -0.7f;
-    const float cIm = 0.27015f + point.z;
+    const float cIm = 0.27015f + 3.f * point.z;
 
     float newRe = 1.5f * point.x / 0.5f;
     float newIm = point.y / 0.5f;
@@ -100,7 +94,9 @@ inline varying vec4f getVoxelColor(const uniform FractalsRenderer* uniform self,
 {
     uint8 voxelValue = getJuliaContribution(self, point, iterations);
     const float normalizedValue =
-        (voxelValue - self->colorMapMinValue) / self->colorMapRange;
+        clamp(((float)voxelValue - self->colorMapMinValue) /
+                  (float)self->colorMapRange,
+              0.f, 1.f);
 
     // Voxel color according to colormap value
     return self->colorMap[self->colorMapSize * normalizedValue];
@@ -108,34 +104,30 @@ inline varying vec4f getVoxelColor(const uniform FractalsRenderer* uniform self,
 
 inline float getShadowContribution(const uniform FractalsRenderer* uniform self,
                                    varying ScreenSample& sample,
-                                   const vec3f point)
+                                   const vec3f point, const float epsilon)
 {
-    uniform int i = 0;
     float pathOpacity = 0.f;
-    // for (uniform int i = 0; self->lights && i < self->numLights; ++i)
+    for (uniform int i = 0;
+         pathOpacity < 1.f && self->lights && i < self->numLights; ++i)
     {
         const uniform Light* uniform light = self->lights[i];
-        const varying vec2f s = make_vec2f(1.f / self->randomNumber);
+        const varying vec2f s = make_vec2f(0.5f);
         DifferentialGeometry dg;
         dg.P = point;
         const varying Light_SampleRes lightSample = light->sample(light, dg, s);
 
-        vec3f dir;
-        if (self->softShadows > 0.f)
-            dir =
-                normalize(self->softShadows *
-                          getRandomVector(self->super.fb, sample,
-                                          lightSample.dir, self->randomNumber));
-        else
-            dir = lightSample.dir;
+        Ray ray;
+        ray.dir = neg(lightSample.dir);
+        ray.org = point;
+        float t0, t1;
+        const vec3f aabbmin = make_vec3f(-0.5f);
+        const vec3f aabbmax = make_vec3f(0.5f);
+        if (!intersectBox(ray, aabbmin, aabbmax, t0, t1))
+            break;
 
-        const float samplesPerPixel = self->volumeSamplesPerRay;
-        const float epsilon = self->volumeDimensions.z / samplesPerPixel;
-
-        for (float t = epsilon;
-             pathOpacity < 1.f && t < self->volumeDimensions.z; t += epsilon)
+        for (float t = t0; pathOpacity < 1.f && t < t1; t += epsilon)
         {
-            const vec3f p = point + t * dir;
+            const vec3f p = ray.org + t * ray.dir;
             const vec4f voxelColor = getVoxelColor(self, p, 255);
             pathOpacity += voxelColor.w;
         }
@@ -149,31 +141,32 @@ inline vec3f FractalsRenderer_shadeRay(
     vec4f pathColor = make_vec4f(0.f);
     float pathOpacity = 0.f;
 
-    float epsilon = self->volumeDimensions.z / self->volumeSamplesPerRay;
-
     float t0, t1;
-    vec3f aabbmin = make_vec3f(0, 0, 0);
-    vec3f aabbmax = self->volumeDimensions;
-    intersectBox(sample.ray, aabbmin, aabbmax, t0, t1);
-    float t = t0;
-    vec3f point;
-    for (t = t0; pathOpacity < 1.f && t < t1; t += epsilon)
-    {
-        point = (sample.ray.org + t * sample.ray.dir) - 0.5f;
-        vec4f voxelColor = getVoxelColor(self, point, sample.sampleID.z);
-        pathOpacity += voxelColor.w;
-        composite(voxelColor, pathColor, 1.f);
-    }
+    const vec3f aabbmin = make_vec3f(0.f);
+    const vec3f aabbmax = make_vec3f(1.f);
+    if (!intersectBox(sample.ray, aabbmin, aabbmax, t0, t1))
+        return make_vec3f(self->bgColor);
 
-    // Shadow
-    if (pathOpacity > 0.5f && self->shadows > 0.f)
+    const float epsilon = max(0.001f, 1.f / (float)(self->volumeSamplesPerRay));
+
+    for (float t = t0; pathOpacity < 1.f && t < t1; t += epsilon)
     {
-        const float shadowContribution =
-            pathOpacity *
-            (1.f - self->shadows * getShadowContribution(self, sample, point));
-        pathColor.x *= shadowContribution;
-        pathColor.y *= shadowContribution;
-        pathColor.z *= shadowContribution;
+        const vec3f point = (sample.ray.org + t * sample.ray.dir) - 0.5f;
+        vec4f voxelColor = getVoxelColor(self, point, 255);
+
+        pathOpacity += voxelColor.w;
+
+        // Shadow
+        if (voxelColor.w > 0.9f)
+        {
+            const float shadowContribution =
+                getShadowContribution(self, sample, point, epsilon);
+            voxelColor.x *= 1.f - shadowContribution;
+            voxelColor.y *= 1.f - shadowContribution;
+            voxelColor.z *= 1.f - shadowContribution;
+        }
+
+        composite(voxelColor, pathColor, 1.f);
     }
 
     // Combine with background color
@@ -181,7 +174,7 @@ inline vec3f FractalsRenderer_shadeRay(
     composite(bgColor, pathColor, 1.f);
 
     sample.alpha = pathOpacity;
-    sample.z = t;
+    sample.z = t0;
 
     return make_vec3f(pathColor);
 }
@@ -214,12 +207,11 @@ export void FractalsRenderer_set(
     const uniform bool& shadingEnabled, const uniform int& randomNumber,
     const uniform float& timestamp, const uniform int& spp,
     const uniform bool& electronShadingEnabled, void** uniform lights,
-    const uniform int32 numLights, void** uniform materials,
-    const uniform int32 numMaterials, const uniform int32& volumeSamplesPerRay,
+    const uniform int32 numLights, const uniform int32& volumeSamplesPerRay,
     uniform vec4f* uniform colormap,
     uniform vec3f* uniform emissionIntensitiesMap,
     const uniform int32 colorMapSize, const uniform float& colorMapMinValue,
-    const uniform float& colorMapRange, const uniform float& threshold)
+    const uniform float& colorMapRange)
 {
     uniform FractalsRenderer* uniform self =
         (uniform FractalsRenderer * uniform)_self;
@@ -227,20 +219,13 @@ export void FractalsRenderer_set(
     self->bgColor = bgColor;
     self->shadows = shadows;
     self->softShadows = softShadows;
-    self->ambientOcclusionStrength = ambientOcclusionStrength;
-    self->ambientOcclusionDistance = ambientOcclusionDistance;
     self->shadingEnabled = shadingEnabled;
     self->randomNumber = randomNumber;
     self->timestamp = timestamp;
     self->spp = spp;
-    self->electronShadingEnabled = electronShadingEnabled;
 
     self->lights = (const uniform Light* uniform* uniform)lights;
     self->numLights = numLights;
-
-    self->materials =
-        (const uniform ExtendedOBJMaterial* uniform* uniform)materials;
-    self->numMaterials = numMaterials;
 
     self->colorMap = (uniform vec4f * uniform)colormap;
     self->emissionIntensitiesMap =
@@ -248,8 +233,6 @@ export void FractalsRenderer_set(
     self->colorMapSize = colorMapSize;
     self->colorMapMinValue = colorMapMinValue;
     self->colorMapRange = colorMapRange;
-
-    self->threshold = threshold;
 
     self->volumeSamplesPerRay = volumeSamplesPerRay;
     self->volumeDimensions = make_vec3f(1.f);
