@@ -106,6 +106,7 @@ inline vec3f TransparencyRenderer_shadeRay(
         const uniform ExtendedOBJMaterial* objMaterial =
             (const uniform ExtendedOBJMaterial*)material;
         vec3f Kd;
+        MaterialShadingMode shadingMode = diffuse;
         if (!objMaterial)
         {
             Kd = make_vec3f(dg.color);
@@ -114,11 +115,12 @@ inline vec3f TransparencyRenderer_shadeRay(
         else
             foreach_unique(mat in objMaterial)
             {
-                Kd = make_vec3f(dg.color) * mat->diffuse;
-                opacity = dg.color.w * mat->opacity;
+                Kd = make_vec3f(dg.color) * mat->Kd;
+                opacity = dg.color.w * mat->d;
+                shadingMode = mat->shadingMode;
             }
 
-        if (self->abstract.electronShadingEnabled)
+        if (shadingMode == electron)
             opacity = 0.2f;
 
         if (depth == 0)
@@ -158,7 +160,7 @@ void TransparencyRenderer_renderSample(uniform Renderer* uniform _self,
                                        varying ScreenSample& sample)
 {
     uniform TransparencyRenderer* uniform self =
-        (uniform TransparencyRenderer * uniform)_self;
+        (uniform TransparencyRenderer * uniform) _self;
     sample.ray.time = self->abstract.timestamp;
     sample.rgb = TransparencyRenderer_shadeRay(self, sample);
 }
@@ -176,29 +178,27 @@ export void* uniform TransparencyRenderer_create(void* uniform cppE)
 export void TransparencyRenderer_set(
     void* uniform _self, void* uniform bgMaterial,
     const uniform int& randomNumber, const uniform float& timestamp,
-    const uniform int& spp, const uniform int& electronShadingEnabled,
-    uniform float* uniform simulationData,
+    const uniform int& spp, uniform float* uniform simulationData,
     const uniform int64 simulationDataSize, uniform vec4f* uniform colormap,
     uniform vec3f* uniform emissionIntensitiesMap,
     const uniform int32 colorMapSize, const uniform float& colorMapMinValue,
     const uniform float& colorMapRange, const uniform float& threshold)
 {
     uniform TransparencyRenderer* uniform self =
-        (uniform TransparencyRenderer * uniform)_self;
+        (uniform TransparencyRenderer * uniform) _self;
 
     self->abstract.bgMaterial =
-        (uniform ExtendedOBJMaterial * uniform)bgMaterial;
+        (uniform ExtendedOBJMaterial * uniform) bgMaterial;
 
     self->abstract.randomNumber = randomNumber;
     self->abstract.timestamp = timestamp;
     self->abstract.spp = spp;
-    self->abstract.electronShadingEnabled = electronShadingEnabled;
 
     self->abstract.volumeData = 0;
 
-    self->abstract.colorMap = (uniform vec4f * uniform)colormap;
+    self->abstract.colorMap = (uniform vec4f * uniform) colormap;
     self->abstract.emissionIntensitiesMap =
-        (uniform vec3f * uniform)emissionIntensitiesMap;
+        (uniform vec3f * uniform) emissionIntensitiesMap;
     self->abstract.colorMapSize = colorMapSize;
     self->abstract.colorMapMinValue = colorMapMinValue;
     self->abstract.colorMapRange = colorMapRange;

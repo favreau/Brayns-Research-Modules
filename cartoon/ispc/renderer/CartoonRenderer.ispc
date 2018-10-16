@@ -70,8 +70,7 @@ inline vec3f CartoonRenderer_shadeRay(
     if (!objMaterial)
         Kd = make_vec3f(dg.color);
     else
-        foreach_unique(mat in objMaterial) Kd =
-            mat->diffuse * make_vec3f(dg.color);
+        foreach_unique(mat in objMaterial) Kd = mat->Kd * make_vec3f(dg.color);
 
     // Head-light cartoon shading
     const vec3f intersection = dg.P + dg.epsilon * dg.Ns;
@@ -93,7 +92,7 @@ void CartoonRenderer_renderSample(uniform Renderer* uniform _self,
                                   varying ScreenSample& sample)
 {
     uniform CartoonRenderer* uniform self =
-        (uniform CartoonRenderer * uniform)_self;
+        (uniform CartoonRenderer * uniform) _self;
     sample.ray.time = self->abstract.timestamp;
     sample.rgb = CartoonRenderer_shadeRay(self, sample);
 }
@@ -113,10 +112,10 @@ export void CartoonRenderer_set(void* uniform _self, void* uniform bgMaterial,
                                 uniform int32 numLights)
 {
     uniform CartoonRenderer* uniform self =
-        (uniform CartoonRenderer * uniform)_self;
+        (uniform CartoonRenderer * uniform) _self;
 
     self->abstract.bgMaterial =
-        (uniform ExtendedOBJMaterial * uniform)bgMaterial;
+        (uniform ExtendedOBJMaterial * uniform) bgMaterial;
 
     self->abstract.timestamp = timestamp;
     self->abstract.spp = spp;

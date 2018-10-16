@@ -295,7 +295,7 @@ void DistanceEstimatorRenderer_renderSample(uniform Renderer* uniform _self,
                                             varying ScreenSample& sample)
 {
     uniform DistanceEstimatorRenderer* uniform self =
-        (uniform DistanceEstimatorRenderer * uniform)_self;
+        (uniform DistanceEstimatorRenderer * uniform) _self;
     sample.ray.time = self->abstract.timestamp;
     sample.rgb = DistanceEstimatorRenderer_shadeRay(self, sample);
 }
@@ -315,8 +315,7 @@ export void DistanceEstimatorRenderer_set(
     const uniform float& softShadows,
     const uniform float& ambientOcclusionStrength,
     const uniform float& ambientOcclusionDistance,
-    const uniform bool& shadingEnabled, const uniform int& randomNumber,
-    const uniform float& timestamp, const uniform bool& electronShadingEnabled,
+    const uniform int& randomNumber, const uniform float& timestamp,
     void** uniform lights, const uniform int32 numLights,
     const uniform int32& volumeSamplesPerRay, uniform vec4f* uniform colormap,
     uniform vec3f* uniform emissionIntensitiesMap,
@@ -324,26 +323,24 @@ export void DistanceEstimatorRenderer_set(
     const uniform float& colorMapRange, const uniform float& threshold)
 {
     uniform DistanceEstimatorRenderer* uniform self =
-        (uniform DistanceEstimatorRenderer * uniform)_self;
+        (uniform DistanceEstimatorRenderer * uniform) _self;
 
     self->abstract.bgMaterial =
-        (uniform ExtendedOBJMaterial * uniform)bgMaterial;
+        (uniform ExtendedOBJMaterial * uniform) bgMaterial;
 
     self->abstract.shadows = shadows;
     self->abstract.softShadows = softShadows;
     self->abstract.ambientOcclusionStrength = ambientOcclusionStrength;
     self->abstract.ambientOcclusionDistance = ambientOcclusionDistance;
-    self->abstract.shadingEnabled = shadingEnabled;
     self->abstract.randomNumber = randomNumber;
     self->abstract.timestamp = timestamp;
-    self->abstract.electronShadingEnabled = electronShadingEnabled;
 
     self->abstract.lights = (const uniform Light* uniform* uniform)lights;
     self->abstract.numLights = numLights;
 
-    self->colorMap = (uniform vec4f * uniform)colormap;
+    self->colorMap = (uniform vec4f * uniform) colormap;
     self->emissionIntensitiesMap =
-        (uniform vec3f * uniform)emissionIntensitiesMap;
+        (uniform vec3f * uniform) emissionIntensitiesMap;
     self->colorMapSize = colorMapSize;
     self->colorMapMinValue = colorMapMinValue;
     self->colorMapRange = colorMapRange;

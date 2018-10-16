@@ -70,7 +70,7 @@ inline vec3f pathTracingContribution(const uniform PathTracingRenderer* uniform
             Kd = make_vec3f(dg.color);
         else
             foreach_unique(mat in objMaterial) Kd =
-                mat->diffuse * make_vec3f(dg.color);
+                mat->Kd * make_vec3f(dg.color);
 
         // compute local orthornormal base at hitpoint
         const vec3f N = dg.Ns;
@@ -181,24 +181,24 @@ inline vec3f PathTracingRenderer_shadeRay(
             else
                 foreach_unique(mat in objMaterial)
                 {
-                    opacity = mat->opacity;
+                    opacity = mat->d;
 
                     // Diffuse
-                    Kd = mat->diffuse;
-                    if (valid(mat->map_diffuse))
+                    Kd = mat->Kd;
+                    if (valid(mat->map_Kd))
                     {
-                        const vec4f value = get4f(mat->map_diffuse, dg.st);
+                        const vec4f value = get4f(mat->map_Kd, dg.st);
                         Kd = make_vec3f(value);
                         opacity *= value.w;
                     }
 
                     // Specular
-                    Ks = mat->specular;
-                    if (valid(mat->map_specular))
-                        Ks = get3f(mat->map_specular, dg.st);
-                    Ns = mat->shininess;
-                    if (valid(mat->map_shininess))
-                        Ns = get1f(mat->map_shininess, dg.st);
+                    Ks = mat->Ks;
+                    if (valid(mat->map_Ks))
+                        Ks = get3f(mat->map_Ks, dg.st);
+                    Ns = mat->Ns;
+                    if (valid(mat->map_Ns))
+                        Ns = get1f(mat->map_Ns, dg.st);
 
                     // Refraction
                     refraction = mat->refraction;
@@ -213,13 +213,13 @@ inline vec3f PathTracingRenderer_shadeRay(
                     }
 
                     // Normal mapping
-                    if (valid(mat->map_normals))
+                    if (valid(mat->map_Bump))
                         normal =
-                            normalize(normal * get3f(mat->map_normals, dg.st));
+                            normalize(normal * get3f(mat->map_Bump, dg.st));
 
                     // Emissive mapping
-                    if (valid(mat->map_emission))
-                        Kd = Kd + get3f(mat->map_emission, dg.st);
+                    if (valid(mat->map_a))
+                        Kd = Kd + get3f(mat->map_a, dg.st);
                 }
 
             const vec3f reflectedNormal =
@@ -308,7 +308,7 @@ void PathTracingRenderer_renderSample(uniform Renderer* uniform _self,
                                       varying ScreenSample& sample)
 {
     uniform PathTracingRenderer* uniform self =
-        (uniform PathTracingRenderer * uniform)_self;
+        (uniform PathTracingRenderer * uniform) _self;
     sample.ray.time = self->abstract.timestamp;
     sample.rgb = PathTracingRenderer_shadeRay(self, sample);
 }
@@ -330,10 +330,10 @@ export void PathTracingRenderer_set(
     const uniform float& ambientOcclusionDistance)
 {
     uniform PathTracingRenderer* uniform self =
-        (uniform PathTracingRenderer * uniform)_self;
+        (uniform PathTracingRenderer * uniform) _self;
 
     self->abstract.bgMaterial =
-        (uniform ExtendedOBJMaterial * uniform)bgMaterial;
+        (uniform ExtendedOBJMaterial * uniform) bgMaterial;
 
     self->abstract.ambientOcclusionStrength = ambientOcclusionStrength;
     self->abstract.ambientOcclusionDistance = ambientOcclusionDistance;

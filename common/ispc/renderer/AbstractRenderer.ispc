@@ -100,21 +100,19 @@ inline bool indirectShading(const uniform AbstractRenderer* uniform self,
             {
                 // Check if material emits light and is random rays hits the
                 // surface in the opposite direction from the surface normal
-                if (mat->emission != 0.f &&
-                    dot(geometry.Ns, randomDirection) < 0.f)
+                if (mat->a != 0.f && dot(geometry.Ns, randomDirection) < 0.f)
                 {
                     // Light emitting material
-                    vec3f localDiffuseColor = mat->diffuse;
-                    if (valid(mat->map_diffuse))
-                        localDiffuseColor =
-                            get3f(mat->map_diffuse, geometry.st);
+                    vec3f localDiffuseColor = mat->Kd;
+                    if (valid(mat->map_Kd))
+                        localDiffuseColor = get3f(mat->map_Kd, geometry.st);
 
                     // intensity
-                    vec3f Ka = make_vec3f(mat->emission);
-                    indirectShadingPower = mat->emission;
-                    if (valid(mat->map_emission))
+                    vec3f Ka = make_vec3f(mat->a);
+                    indirectShadingPower = mat->a;
+                    if (valid(mat->map_a))
                     {
-                        Ka = get3f(mat->map_emission, geometry.st);
+                        Ka = get3f(mat->map_a, geometry.st);
                         indirectShadingPower = reduce_max(Ka);
                     }
 
@@ -127,8 +125,8 @@ inline bool indirectShading(const uniform AbstractRenderer* uniform self,
                 {
                     // Material does not emit light, occlusion is considered
                     // according to surface localOpacity
-                    indirectShadingColor = make_vec3f(mat->opacity);
-                    indirectShadingPower = -mat->opacity;
+                    indirectShadingColor = make_vec3f(mat->d);
+                    indirectShadingPower = -mat->d;
                 }
             }
         else
@@ -160,10 +158,9 @@ inline float shadedLightIntensity(const uniform AbstractRenderer* uniform self,
     vec3f ld = lightDirection;
     if (self->softShadows != 0.f)
         // Slightly alter light direction for Soft shadows
-        ld = normalize(ld +
-                       self->softShadows * getRandomVector(self->super.fb,
-                                                           sample, normal,
-                                                           self->randomNumber));
+        ld = normalize(ld + self->softShadows *
+                                getRandomVector(self->super.fb, sample, normal,
+                                                self->randomNumber));
 
     Ray shadowRay;
     setRay(shadowRay, intersection, ld);
@@ -210,16 +207,15 @@ inline float shadedLightIntensity(const uniform AbstractRenderer* uniform self,
             {
                 foreach_unique(mat in objMaterial)
                 {
-                    materialOpacity = mat->opacity;
-                    if (valid(mat->map_opacity))
+                    materialOpacity = mat->d;
+                    if (valid(mat->map_d))
                     {
-                        vec4f d_map = get4f(mat->map_opacity, dg.st);
+                        vec4f d_map = get4f(mat->map_d, dg.st);
                         materialOpacity = d_map.x;
                     }
-                    else if (valid(mat->map_diffuse))
+                    else if (valid(mat->map_Kd))
                     {
-                        vec4f localDiffuseColor_map =
-                            get4f(mat->map_diffuse, dg.st);
+                        vec4f localDiffuseColor_map = get4f(mat->map_Kd, dg.st);
                         materialOpacity = 1.f - localDiffuseColor_map.w;
                     }
                 }
@@ -379,11 +375,10 @@ inline varying vec4f
                 colorMapColor =
                     self->colorMap[self->colorMapSize * normalizedValue];
 
-            // Light emission intensity
-            const vec4f emissionIntensity =
+            // Light a intensity
+            const vec4f aIntensity =
                 make_vec4f(self->emissionIntensitiesMap[normalizedValue], 0.f);
-            vec4f voxelColor =
-                max(make_vec4f(0.f), emissionIntensity + colorMapColor);
+            vec4f voxelColor = max(make_vec4f(0.f), aIntensity + colorMapColor);
 
             // Shadow intensity
             float shadowIntensity = 0.f;

@@ -301,7 +301,7 @@ void PbrRenderer_renderSample(uniform Renderer* uniform _self,
                               void* uniform perFrameData,
                               varying ScreenSample& sample)
 {
-    uniform PbrRenderer* uniform self = (uniform PbrRenderer * uniform)_self;
+    uniform PbrRenderer* uniform self = (uniform PbrRenderer * uniform) _self;
     sample.ray.time = self->abstract.timestamp;
     sample.rgb = PbrRenderer_shadeRay(self, sample);
 }
@@ -319,10 +319,10 @@ export void PbrRenderer_set(void* uniform _self, void* uniform bgMaterial,
                             const uniform float& timestamp,
                             void** uniform lights, uniform int32 numLights)
 {
-    uniform PbrRenderer* uniform self = (uniform PbrRenderer * uniform)_self;
+    uniform PbrRenderer* uniform self = (uniform PbrRenderer * uniform) _self;
 
     self->abstract.bgMaterial =
-        (uniform ExtendedOBJMaterial * uniform)bgMaterial;
+        (uniform ExtendedOBJMaterial * uniform) bgMaterial;
 
     self->abstract.timestamp = timestamp;
 

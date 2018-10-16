@@ -22,6 +22,8 @@
 
 #pragma once
 
+#include <brayns/common/commonTypes.h>
+
 #include <ospray/SDK/common/Material.h>
 #include <ospray/SDK/texture/Texture2D.h>
 
@@ -33,64 +35,54 @@ typedef ospray::vec3f Color;
 
 struct ExtendedOBJMaterial : public ospray::Material
 {
-    // Opacity
-    ospray::Texture2D *map_opacity;
-    ospray::affine2f xform_opacity;
-    float opacity;
+    /*! opacity: 0 (transparent), 1 (opaque) */
+    ospray::Texture2D* map_d;
+    ospray::affine2f xform_d;
+    float d;
 
     /*! refraction index */
+    ospray::Texture2D* map_Refraction;
+    ospray::affine2f xform_Refraction;
     float refraction;
 
     /*! reflection index */
-    ospray::Texture2D *map_reflection;
-    ospray::affine2f xform_reflection;
+    ospray::Texture2D* map_Reflection;
+    ospray::affine2f xform_Reflection;
     float reflection;
 
-    // Ambient
-    ospray::Texture2D *map_ambient;
-    ospray::affine2f xform_ambient;
-    float ambient;
+    /*! radiance: 0 (none), 1 (full) */
+    ospray::Texture2D* map_a;
+    ospray::affine2f xform_a;
+    float a;
 
-    // Diffuse (Kd)
-    ospray::Texture2D *map_diffuse;
-    ospray::affine2f xform_diffuse;
-    Color diffuse;
+    /*! diffuse  reflectance: 0 (none), 1 (full) */
+    ospray::Texture2D* map_Kd;
+    ospray::affine2f xform_Kd;
+    Color Kd;
 
-    // Specular (Ks)
-    ospray::Texture2D *map_specular;
-    ospray::affine2f xform_specular;
-    Color specular;
+    /*! specular reflectance: 0 (none), 1 (full) */
+    ospray::Texture2D* map_Ks;
+    ospray::affine2f xform_Ks;
+    Color Ks;
 
-    // Shininess (specular exponent) Ns
-    ospray::Texture2D *map_shininess;
-    ospray::affine2f xform_shininess;
-    float shininess;
+    /*! specular exponent: 0 (diffuse), infinity (specular) */
+    ospray::Texture2D* map_Ns;
+    ospray::affine2f xform_Ns;
+    float Ns;
 
-    // Emission
-    ospray::Texture2D *map_emission;
-    ospray::affine2f xform_emission;
-    float emission;
-
-    // Glossiness
+    /*! Glossiness: 0 (none), 1 (full) */
     float glossiness;
 
-    // Normals
-    ospray::Texture2D *map_normals;
-    ospray::affine2f xform_normals;
-    ospray::linear2f rot_normals;
+    /*! bump map */
+    ospray::Texture2D* map_Bump;
+    ospray::affine2f xform_Bump;
+    ospray::linear2f rot_Bump;
 
-    // Metallic roughness
-    ospray::Texture2D *map_metal;
-    ospray::affine2f xform_metal;
-    ospray::linear2f rot_metal;
-
-    // Casts simulation data
+    /*! Casts simulation data */
     bool castSimulationData;
 
-    // PBR attributes
-    ospray::vec4f pbrBaseColorFactor;
-    float pbrMetallicFactor;
-    float pbrRoughnessFactor;
+    /*! Shading mode (none, diffuse, electron, etc) */
+    MaterialShadingMode shadingMode;
 
     std::string toString() const final
     {
@@ -99,6 +91,5 @@ struct ExtendedOBJMaterial : public ospray::Material
 
     void commit() final;
 };
-
-} // ::brayns::obj
-} // ::brayns
+} // namespace obj
+} // namespace brayns

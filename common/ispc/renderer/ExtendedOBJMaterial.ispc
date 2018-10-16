@@ -22,74 +22,55 @@
 
 #include "ExtendedOBJMaterial.ih"
 
-export void *uniform ExtendedOBJMaterial_create(void *uniform cppE)
+export void* uniform ExtendedOBJMaterial_create(void* uniform cppE)
 {
-    uniform ExtendedOBJMaterial *uniform mat =
+    uniform ExtendedOBJMaterial* uniform mat =
         uniform new uniform ExtendedOBJMaterial;
     mat->super.cppEquivalent = cppE;
     return mat;
 }
 
 export void ExtendedOBJMaterial_set(
-    void *uniform _mat, const void *uniform map_opacity,
-    const uniform affine2f &xform_opacity, const uniform float &opacity,
-    const uniform float &refraction, const void *uniform map_reflection,
-    const uniform affine2f &xform_reflection, const uniform float &reflection,
-    const void *uniform map_emission, const uniform affine2f &xform_emission,
-    const uniform float &emission, const uniform float &glossiness,
-    const uniform bool &castSimulationData, const void *uniform map_diffuse,
-    const uniform affine2f &xform_diffuse, const uniform vec3f &diffuse,
-    const void *uniform map_specular, const uniform affine2f &xform_specular,
-    const uniform vec3f &specular, const void *uniform map_shininess,
-    const uniform affine2f &xform_shininess, const uniform float &shininess,
-    const void *uniform map_normals, const uniform affine2f &xform_normals,
-    const uniform linear2f &rot_normals, const void *uniform map_metal,
-    const uniform affine2f &xform_metal,
-    const uniform vec4f &pbrBaseColorFactor,
-    const uniform float &pbrMetallicFactor,
-    const uniform float &pbrRoughnessFactor)
+    void* uniform _mat, const void* uniform map_d,
+    const uniform affine2f& xform_d, const uniform float& d,
+    const void* uniform map_refraction,
+    const uniform affine2f& xform_refraction, const uniform float& refraction,
+    const void* uniform map_reflection,
+    const uniform affine2f& xform_reflection, const uniform float& reflection,
+    const void* uniform map_a, const uniform affine2f& xform_a,
+    const uniform float& a, const uniform float& glossiness,
+    const uniform bool& castSimulationData, const void* uniform map_Kd,
+    const uniform affine2f& xform_Kd, const uniform vec3f& Kd,
+    const void* uniform map_Ks, const uniform affine2f& xform_Ks,
+    const uniform vec3f& Ks, const void* uniform map_Ns,
+    const uniform affine2f& xform_Ns, const uniform float& Ns,
+    const void* uniform map_Bump, const uniform affine2f& xform_Bump,
+    const uniform linear2f& rot_Bump,
+    const uniform MaterialShadingMode& shadingMode)
 {
-    uniform ExtendedOBJMaterial *uniform self =
-        (uniform ExtendedOBJMaterial * uniform)_mat;
+    uniform ExtendedOBJMaterial* uniform self =
+        (uniform ExtendedOBJMaterial * uniform) _mat;
 
-    self->map_opacity =
-        make_TextureParam((Texture2D *)map_opacity, xform_opacity);
-    self->opacity = opacity;
-
+    self->map_d = make_TextureParam((Texture2D*)map_d, xform_d);
+    self->d = d;
+    self->map_refraction =
+        make_TextureParam((Texture2D*)map_refraction, xform_refraction);
     self->refraction = refraction;
-
     self->map_reflection =
-        make_TextureParam((Texture2D *)map_reflection, xform_reflection);
+        make_TextureParam((Texture2D*)map_reflection, xform_reflection);
     self->reflection = reflection;
-
-    self->map_emission =
-        make_TextureParam((Texture2D *)map_emission, xform_emission);
-    self->emission = emission;
-
-    self->map_diffuse =
-        make_TextureParam((Texture2D *)map_diffuse, xform_diffuse);
-    self->diffuse = diffuse;
-
-    self->map_specular =
-        make_TextureParam((Texture2D *)map_specular, xform_specular);
-    self->specular = specular;
-
-    self->map_shininess =
-        make_TextureParam((Texture2D *)map_shininess, xform_shininess);
-    self->shininess = shininess;
-
-    self->map_normals =
-        make_TextureParam((Texture2D *)map_normals, xform_normals);
-    self->rot_normals = rot_normals;
-
-    self->map_metal = make_TextureParam((Texture2D *)map_metal, xform_metal);
-
+    self->map_a = make_TextureParam((Texture2D*)map_a, xform_a);
+    self->a = a;
     self->glossiness = glossiness;
-
     self->castSimulationData = castSimulationData;
-
-    // PBR attributes
-    self->pbrBaseColorFactor = pbrBaseColorFactor;
-    self->pbrMetallicFactor = pbrMetallicFactor;
-    self->pbrRoughnessFactor = pbrRoughnessFactor;
+    self->map_Kd = make_TextureParam((Texture2D*)map_Kd, xform_Kd);
+    self->Kd = Kd;
+    self->map_Ks = make_TextureParam((Texture2D*)map_Ks, xform_Ks);
+    self->Ks = Ks;
+    self->map_Ns = make_TextureParam((Texture2D*)map_Ns, xform_Ns);
+    self->Ns = Ns;
+    self->map_Bump = make_TextureParam((Texture2D*)map_Bump, xform_Bump);
+    self->rot_Bump = rot_Bump;
+    self->volume = 0;
+    self->shadingMode = shadingMode;
 }

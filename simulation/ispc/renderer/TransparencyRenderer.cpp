@@ -47,8 +47,7 @@ void TransparencyRenderer::commit()
 
     ispc::TransparencyRenderer_set(
         getIE(), (_bgMaterial ? _bgMaterial->getIE() : nullptr), _randomNumber,
-        _timestamp, spp, _electronShadingEnabled,
-        _simulationData ? (float*)_simulationData->data : NULL,
+        _timestamp, spp, _simulationData ? (float*)_simulationData->data : NULL,
         _simulationDataSize,
         _transferFunctionDiffuseData
             ? (ispc::vec4f*)_transferFunctionDiffuseData->data
@@ -65,6 +64,5 @@ TransparencyRenderer::TransparencyRenderer()
     ispcEquivalent = ispc::TransparencyRenderer_create(this);
 }
 
-OSP_REGISTER_RENDERER(TransparencyRenderer, TRANSPARENCY);
 OSP_REGISTER_RENDERER(TransparencyRenderer, transparency);
-} // ::brayns
+} // namespace brayns

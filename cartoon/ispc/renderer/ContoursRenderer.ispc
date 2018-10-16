@@ -110,8 +110,7 @@ inline vec3f ContoursRenderer_shadeRay(
     if (!objMaterial)
         Kd = make_vec3f(dg.color);
     else
-        foreach_unique(mat in objMaterial) Kd =
-            mat->diffuse * make_vec3f(dg.color);
+        foreach_unique(mat in objMaterial) Kd = mat->Kd * make_vec3f(dg.color);
 
     // Launch a ray parallel to the camera ray, shifted in the direction of
     // the intersected surface normal
@@ -133,7 +132,7 @@ void ContoursRenderer_renderSample(uniform Renderer* uniform _self,
                                    varying ScreenSample& sample)
 {
     uniform ContoursRenderer* uniform self =
-        (uniform ContoursRenderer * uniform)_self;
+        (uniform ContoursRenderer * uniform) _self;
     sample.ray.time = self->abstract.timestamp;
     sample.rgb = ContoursRenderer_shadeRay(self, sample);
 }
@@ -156,10 +155,10 @@ export void ContoursRenderer_set(void* uniform _self, void* uniform bgMaterial,
                                  const uniform float& detectionDistance)
 {
     uniform ContoursRenderer* uniform self =
-        (uniform ContoursRenderer * uniform)_self;
+        (uniform ContoursRenderer * uniform) _self;
 
     self->abstract.bgMaterial =
-        (uniform ExtendedOBJMaterial * uniform)bgMaterial;
+        (uniform ExtendedOBJMaterial * uniform) bgMaterial;
 
     self->abstract.timestamp = timestamp;
     self->abstract.spp = spp;
