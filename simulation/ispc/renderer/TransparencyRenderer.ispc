@@ -19,26 +19,25 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include <common/ispc/renderer/AbstractRenderer.ih>
+#include <common/ispc/renderer/SimulationRenderer.ih>
 
 struct TransparencyRenderer
 {
-    AbstractRenderer abstract;
+    SimulationRenderer super;
 
     uniform float* uniform simulationData;
     int64 simulationDataSize;
     float threshold;
+    float timestamp;
+    int32 randomNumber;
 };
 
-inline varying vec4f
-    getSimulationValue(const uniform TransparencyRenderer* uniform self,
-                       DifferentialGeometry& dg, const int32 index)
+inline vec4f getSimulationValue(const uniform TransparencyRenderer* uniform
+                                    self,
+                                DifferentialGeometry& dg, const int32 index)
 {
-    // needs to be the same in MorphologyLoader.cpp
-    const float OFFSET_MAGIC = 1e6;
-
     vec4f color = make_vec4f(1.f, 0.f, 0.f, 0.5f);
-    if (!self->simulationData || !self->abstract.colorMap)
+    if (!self->simulationData || !self->super.colorMap)
         return color;
 
     float value = 0.f;
@@ -55,13 +54,13 @@ inline varying vec4f
         return color;
 
     // Normalize the value according colormap size
-    const float normalizedValue = (value - self->abstract.colorMapMinValue) /
-                                  self->abstract.colorMapRange;
+    const float normalizedValue =
+        (value - self->super.colorMapMinValue) / self->super.colorMapRange;
 
     const uint32 lookupIndex =
-        max(0.f, min(normalizedValue, 1.f)) * (self->abstract.colorMapSize - 1);
+        max(0.f, min(normalizedValue, 1.f)) * (self->super.colorMapSize - 1);
 
-    return self->abstract.colorMap[lookupIndex];
+    return self->super.colorMap[lookupIndex];
 }
 
 inline vec3f TransparencyRenderer_shadeRay(
@@ -82,15 +81,15 @@ inline vec3f TransparencyRenderer_shadeRay(
 
     while (pathOpacity < 1.f)
     {
-        traceRay(self->abstract.super.model, ray);
+        traceRay(self->super.super.super.model, ray);
 
         if (ray.geomID < 0)
         {
             // No intersection
-            colorContribution =
-                skyboxMapping((Renderer*)self, ray, self->abstract.bgMaterial);
+            colorContribution = skyboxMapping((Renderer*)self, ray,
+                                              self->super.super.bgMaterial);
             colorContribution.w = 1.f;
-            composite(colorContribution, intersectionColor);
+            composite(colorContribution, intersectionColor, 1.f);
             break;
         }
 
@@ -98,7 +97,7 @@ inline vec3f TransparencyRenderer_shadeRay(
         // Retreive information about the geometry, typically geometry ID,
         // normal to the surface, material ID, texture coordinates, etc.
         DifferentialGeometry dg;
-        postIntersect(self->abstract.super.model, dg, ray,
+        postIntersect(self->super.super.super.model, dg, ray,
                       DG_NG | DG_NS | DG_NORMALIZE | DG_FACEFORWARD |
                           DG_MATERIALID | DG_COLOR | DG_TEXCOORD);
 
@@ -138,7 +137,7 @@ inline vec3f TransparencyRenderer_shadeRay(
             // Get simulation value from geometry
             colorContribution = getSimulationValue(self, dg, ray.primID);
 
-        composite(colorContribution, intersectionColor);
+        composite(colorContribution, intersectionColor, 1.f);
 
         // Next ray
         ray.t0 = ray.t + dg.epsilon;
@@ -161,7 +160,7 @@ void TransparencyRenderer_renderSample(uniform Renderer* uniform _self,
 {
     uniform TransparencyRenderer* uniform self =
         (uniform TransparencyRenderer * uniform) _self;
-    sample.ray.time = self->abstract.timestamp;
+    sample.ray.time = self->timestamp;
     sample.rgb = TransparencyRenderer_shadeRay(self, sample);
 }
 
@@ -170,8 +169,8 @@ export void* uniform TransparencyRenderer_create(void* uniform cppE)
 {
     uniform TransparencyRenderer* uniform self =
         uniform new uniform TransparencyRenderer;
-    Renderer_Constructor(&self->abstract.super, cppE);
-    self->abstract.super.renderSample = TransparencyRenderer_renderSample;
+    Renderer_Constructor(&self->super.super.super, cppE);
+    self->super.super.super.renderSample = TransparencyRenderer_renderSample;
     return self;
 }
 
@@ -187,23 +186,21 @@ export void TransparencyRenderer_set(
     uniform TransparencyRenderer* uniform self =
         (uniform TransparencyRenderer * uniform) _self;
 
-    self->abstract.bgMaterial =
+    self->super.super.bgMaterial =
         (uniform ExtendedOBJMaterial * uniform) bgMaterial;
 
-    self->abstract.randomNumber = randomNumber;
-    self->abstract.timestamp = timestamp;
-    self->abstract.spp = spp;
+    self->timestamp = timestamp;
+    self->super.super.super.spp = spp;
 
-    self->abstract.volumeData = 0;
-
-    self->abstract.colorMap = (uniform vec4f * uniform) colormap;
-    self->abstract.emissionIntensitiesMap =
+    self->super.colorMap = (uniform vec4f * uniform) colormap;
+    self->super.emissionIntensitiesMap =
         (uniform vec3f * uniform) emissionIntensitiesMap;
-    self->abstract.colorMapSize = colorMapSize;
-    self->abstract.colorMapMinValue = colorMapMinValue;
-    self->abstract.colorMapRange = colorMapRange;
+    self->super.colorMapSize = colorMapSize;
+    self->super.colorMapMinValue = colorMapMinValue;
+    self->super.colorMapRange = colorMapRange;
     self->threshold = threshold;
 
     self->simulationData = (uniform float* uniform)simulationData;
     self->simulationDataSize = simulationDataSize;
+    self->randomNumber = randomNumber;
 }

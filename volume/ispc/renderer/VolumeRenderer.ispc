@@ -19,7 +19,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include <common/ispc/renderer/AbstractRenderer.ih>
+#include <common/ispc/renderer/SimulationRenderer.ih>
 
 //#define REFRACTION
 //#define VOLUME_16BITS
@@ -27,10 +27,11 @@
 const float GI_OPACITY_THRESHOLD = 0.01f;
 const float AMBIENT_LIGHT = 0.f; // 25f;
 const float ALPHA = 2.f;
+const float EPSILON = 0.001f;
 
 struct VolumeRenderer
 {
-    Renderer super;
+    SimulationRenderer super;
 
     // Rendering attributes
     const uniform Light* uniform* uniform lights;
@@ -93,13 +94,13 @@ inline varying bool intersectBox(const uniform VolumeRenderer* uniform self,
     Ray r = ray;
     // We need to avoid division by zero in "vec3 invR = 1.0 / r.Dir;"
     if (r.dir.x == 0)
-        r.dir.x = self->super.epsilon;
+        r.dir.x = EPSILON;
 
     if (r.dir.y == 0)
-        r.dir.y = self->super.epsilon;
+        r.dir.y = EPSILON;
 
     if (r.dir.z == 0)
-        r.dir.z = self->super.epsilon;
+        r.dir.z = EPSILON;
 
     vec3f invR = 1.f / r.dir;
     vec3f tbot = invR * (aabbMin - r.org);
@@ -127,7 +128,7 @@ inline varying float getShadowContribution(
         return 0.f;
 
     // Ray marching from light source to voxel
-    const float epsilon = self->volumeEpsilon;
+    const float epsilon = EPSILON;
     float shadowIntensity = 0.f;
     for (float t = t1; t > epsilon && shadowIntensity < 1.f; t -= epsilon)
     {
@@ -168,16 +169,16 @@ inline float getShadowContributions(const uniform VolumeRenderer* uniform self,
 
         Ray lightRay = ray;
         if (self->softShadows > 0.f)
-            lightRay.dir = normalize(lightSample.dir +
-                                     self->softShadows *
-                                         getRandomVector(self->super.fb, sample,
-                                                         lightSample.dir,
-                                                         self->randomNumber));
+            lightRay.dir = normalize(
+                lightSample.dir +
+                self->softShadows *
+                    getRandomVector(self->super.super.super.fb->size.x, sample,
+                                    lightSample.dir, self->randomNumber));
         else
             lightRay.dir = lightSample.dir;
 
         lightRay.t = length(make_vec3f(self->volumeDimensions));
-        lightRay.t0 = self->super.epsilon;
+        lightRay.t0 = EPSILON;
         lightRay.org = point;
 
         shadowIntensity += getShadowContribution(self, lightRay, sample);
@@ -239,7 +240,7 @@ inline varying vec4f
     // Ray marching
     t0 = max(0.f, t0);
     vec4f pathColor = make_vec4f(0.f);
-    const float epsilon = self->volumeEpsilon;
+    const float epsilon = EPSILON;
     const float random = getRandomValue(sample, self->randomNumber) * epsilon;
     t0 -= random;
     t1 -= random;
@@ -271,7 +272,7 @@ inline varying vec4f
             }
 
             // Compose final voxel color
-            composite(voxelColor, pathColor);
+            composite(voxelColor, pathColor, 1.f);
         }
     }
 
@@ -287,7 +288,7 @@ inline varying vec4f
     }
 
     // Compose with background
-    composite(bgColor, pathColor);
+    composite(bgColor, pathColor, 1.f);
 
     return pathColor;
 }
@@ -474,7 +475,7 @@ inline varying vec4f getVolumeShadedContribution(
 #endif
 
             // Compose final voxel color
-            composite(voxelColor, pathColor);
+            composite(voxelColor, pathColor, 1.f);
         }
 
         // Ambient light
@@ -493,7 +494,7 @@ inline varying vec4f getVolumeShadedContribution(
         }
 
         // Compose with background
-        composite(bgColor, pathColor);
+        composite(bgColor, pathColor, 1.f);
 
         accColor = accColor + pathColor;
     }
@@ -509,7 +510,7 @@ inline vec3f VolumeRenderer_shadeRay(const uniform VolumeRenderer* uniform self,
     sample.z = inf;
 
     // Trace ray
-    traceRay(self->super.model, ray);
+    traceRay(self->super.super.super.model, ray);
 
     // Volume contribution
     if (self->volumeData)
@@ -535,8 +536,8 @@ void VolumeRenderer_renderSample(uniform Renderer* uniform _self,
 export void* uniform VolumeRenderer_create(void* uniform cppE)
 {
     uniform VolumeRenderer* uniform self = uniform new uniform VolumeRenderer;
-    Renderer_Constructor(&self->super, cppE);
-    self->super.renderSample = VolumeRenderer_renderSample;
+    Renderer_Constructor(&self->super.super.super, cppE);
+    self->super.super.super.renderSample = VolumeRenderer_renderSample;
     return self;
 }
 

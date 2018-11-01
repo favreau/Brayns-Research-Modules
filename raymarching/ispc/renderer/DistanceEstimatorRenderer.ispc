@@ -44,6 +44,8 @@ struct DistanceEstimatorRenderer
     // Volume dimension
     vec3f volumeDimensions;
     uint32 volumeSamplesPerRay;
+
+    uint32 randomNumber;
 };
 
 inline float fbm(vec3f& p, const vec3f& n)
@@ -126,7 +128,7 @@ inline vec4f map(const uniform DistanceEstimatorRenderer* uniform self,
     float dsp = sin(50.0 * pos.x) * sin(50.0 * pos.y) * sin(50.0 * pos.z);
     dsp = dsp * dsp * dsp;
     mindist += -0.02 * dsp;
-    mindist += 0.01 * sin(180.0 * mint + self->abstract.randomNumber);
+    mindist += 0.01 * sin(180.0 * mint + self->randomNumber);
     return make_vec4f(mindist, 1.0, dsp, mint);
 }
 
@@ -311,10 +313,7 @@ export void* uniform DistanceEstimatorRenderer_create(void* uniform cppE)
 }
 
 export void DistanceEstimatorRenderer_set(
-    void* uniform _self, void* uniform bgMaterial, const uniform float& shadows,
-    const uniform float& softShadows,
-    const uniform float& ambientOcclusionStrength,
-    const uniform float& ambientOcclusionDistance,
+    void* uniform _self, void* uniform bgMaterial,
     const uniform int& randomNumber, const uniform float& timestamp,
     void** uniform lights, const uniform int32 numLights,
     const uniform int32& volumeSamplesPerRay, uniform vec4f* uniform colormap,
@@ -328,11 +327,6 @@ export void DistanceEstimatorRenderer_set(
     self->abstract.bgMaterial =
         (uniform ExtendedOBJMaterial * uniform) bgMaterial;
 
-    self->abstract.shadows = shadows;
-    self->abstract.softShadows = softShadows;
-    self->abstract.ambientOcclusionStrength = ambientOcclusionStrength;
-    self->abstract.ambientOcclusionDistance = ambientOcclusionDistance;
-    self->abstract.randomNumber = randomNumber;
     self->abstract.timestamp = timestamp;
 
     self->abstract.lights = (const uniform Light* uniform* uniform)lights;
@@ -349,4 +343,6 @@ export void DistanceEstimatorRenderer_set(
 
     self->volumeSamplesPerRay = volumeSamplesPerRay;
     self->volumeDimensions = make_vec3f(1.f);
+
+    self->randomNumber = randomNumber;
 }

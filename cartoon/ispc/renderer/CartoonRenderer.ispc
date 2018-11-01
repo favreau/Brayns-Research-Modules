@@ -21,7 +21,7 @@
 
 #include <common/ispc/renderer/AbstractRenderer.ih>
 
-const unsigned int GRADIENT_SIZE = 4;
+const unsigned int GRADIENT_SIZE = 5;
 
 struct CartoonRenderer
 {
@@ -44,9 +44,6 @@ inline vec3f CartoonRenderer_shadeRay(
     sample.alpha = 0.f;
 
     traceRay(self->abstract.super.model, ray);
-
-    RTCScene data = (RTCScene)self->abstract.super.model->embreeSceneHandle;
-    void* d = rtcGetUserData(data, 0);
 
     if (ray.geomID < 0)
     {
@@ -92,7 +89,7 @@ void CartoonRenderer_renderSample(uniform Renderer* uniform _self,
                                   varying ScreenSample& sample)
 {
     uniform CartoonRenderer* uniform self =
-        (uniform CartoonRenderer * uniform) _self;
+        (uniform CartoonRenderer * uniform)_self;
     sample.ray.time = self->abstract.timestamp;
     sample.rgb = CartoonRenderer_shadeRay(self, sample);
 }
@@ -112,13 +109,13 @@ export void CartoonRenderer_set(void* uniform _self, void* uniform bgMaterial,
                                 uniform int32 numLights)
 {
     uniform CartoonRenderer* uniform self =
-        (uniform CartoonRenderer * uniform) _self;
+        (uniform CartoonRenderer * uniform)_self;
 
     self->abstract.bgMaterial =
-        (uniform ExtendedOBJMaterial * uniform) bgMaterial;
+        (uniform ExtendedOBJMaterial * uniform)bgMaterial;
 
     self->abstract.timestamp = timestamp;
-    self->abstract.spp = spp;
+    self->abstract.super.spp = spp;
 
     self->abstract.lights = (const uniform Light* uniform* uniform)lights;
     self->abstract.numLights = numLights;

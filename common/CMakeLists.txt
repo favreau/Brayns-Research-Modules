@@ -11,14 +11,14 @@ set(${MODULE_NAME}_VERSION_ABI 1)
 
 set(BRAYNS_RESEARCH_COMMON_SOURCES
     ispc/renderer/ExtendedOBJMaterial.cpp
+    ispc/renderer/SimulationRenderer.cpp
     ispc/renderer/AbstractRenderer.cpp)
 
 set(BRAYNS_RESEARCH_COMMON_ISPC_SOURCES
     ispc/renderer/SkyBox.ispc
     ispc/renderer/Glsl.ispc
     ispc/renderer/RandomGenerator.ispc
-    ispc/renderer/ExtendedOBJMaterial.ispc
-    ispc/renderer/AbstractRenderer.ispc)
+    ispc/renderer/ExtendedOBJMaterial.ispc)
 
 # Compile ispc code
 list(APPEND CMAKE_MODULE_PATH ${OSPRAY_CMAKE_ROOT})

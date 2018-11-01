@@ -275,7 +275,7 @@ inline float getShadowContribution(
         if (self->softShadows > 0.f)
             dir =
                 normalize(self->softShadows *
-                          getRandomVector(self->super.fb, sample,
+                          getRandomVector(self->super.fb->size.x, sample,
                                           lightSample.dir, self->randomNumber));
         else
             dir = lightSample.dir;

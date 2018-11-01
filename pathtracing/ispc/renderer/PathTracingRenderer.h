@@ -37,5 +37,9 @@ public:
     */
     std::string toString() const final { return "PathTracingRenderer"; }
     void commit() final;
+
+private:
+    float _aoStrength{0};
+    float _aoDistance{100};
 };
 }

@@ -24,7 +24,8 @@
 #include "Consts.ih"
 #include "ExtendedOBJMaterial.ih"
 
-vec4f skyboxMapping(const uniform Renderer* uniform renderer, Ray& ray,
+vec4f skyboxMapping(const uniform Renderer* uniform renderer,
+                    const varying Ray& ray,
                     const uniform ExtendedOBJMaterial* uniform bgMaterial)
 {
     if (!bgMaterial)
@@ -49,18 +50,19 @@ vec4f skyboxMapping(const uniform Renderer* uniform renderer, Ray& ray,
     const varying float t1 = (-b - r) / a;
     const varying float t2 = (-b + r) / a;
 
-    if (t1 <= renderer->epsilon && t2 <= renderer->epsilon)
+    const varying float epsilon = 0.00001f;
+    if (t1 <= epsilon && t2 <= epsilon)
         return result; // both intersections are behind the ray origin
 
     varying float t = 0.f;
-    if (t1 <= renderer->epsilon)
+    if (t1 <= epsilon)
         t = t2;
-    else if (t2 <= renderer->epsilon)
+    else if (t2 <= epsilon)
         t = t1;
     else
         t = (t1 < t2) ? t1 : t2;
 
-    if (t < renderer->epsilon)
+    if (t < epsilon || t > ray.t)
         return result; // Too close to intersection
 
     const varying vec3f intersection = normalize(ray.org + t * ray.dir);

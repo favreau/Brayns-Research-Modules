@@ -49,10 +49,8 @@ void DistanceEstimatorRenderer::commit()
     _volumeSamplesPerRay = getParam1i("volumeSamplesPerRay", 32);
 
     ispc::DistanceEstimatorRenderer_set(
-        getIE(), (_bgMaterial ? _bgMaterial->getIE() : nullptr), _shadows,
-        _softShadows, _ambientOcclusionStrength, _ambientOcclusionDistance,
-        _randomNumber, _timestamp, _lightPtr, _lightArray.size(),
-        _volumeSamplesPerRay,
+        getIE(), (_bgMaterial ? _bgMaterial->getIE() : nullptr), rand() % 100,
+        _timestamp, _lightPtr, _lightArray.size(), _volumeSamplesPerRay,
         _transferFunctionDiffuseData
             ? (ispc::vec4f*)_transferFunctionDiffuseData->data
             : NULL,

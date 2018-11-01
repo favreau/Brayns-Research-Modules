@@ -1,9 +1,8 @@
-/* Copyright (c) 2018, Cyrille Favreau
+/* Copyright (c) 2015-2018, EPFL/Blue Brain Project
  * All rights reserved. Do not distribute without permission.
- * Responsible Author: Cyrille Favreau <cyrille.favreau@gmail.com>
+ * Responsible Author: Cyrille Favreau <cyrille.favreau@epfl.ch>
  *
- * This file is part of the reseach Brayns module
- * <https://github.com/favreau/Brayns-Research-Modules>
+ * This file is part of Brayns <https://github.com/BlueBrain/Brayns>
  *
  * This library is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 3.0 as published
@@ -19,40 +18,42 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#pragma once
+#ifndef SIMULATIONRENDERER_H
+#define SIMULATIONRENDERER_H
 
-#include <common/ispc/renderer/AbstractRenderer.h>
+// obj
+#include "AbstractRenderer.h"
+#include "ExtendedOBJMaterial.h"
+
+// ospray
+#include <ospray/SDK/common/Material.h>
+#include <ospray/SDK/render/Renderer.h>
+
+// system
+#include <vector>
 
 namespace brayns
 {
-class DistanceEstimatorRenderer : public AbstractRenderer
+/**
+ * The SimulationRenderer class implements a parent renderer for all Brayns
+ * renderers that need to render simulation data
+ */
+class SimulationRenderer : public AbstractRenderer
 {
 public:
-    DistanceEstimatorRenderer();
+    void commit() override;
 
-    /**
-       Returns the class name as a string
-       @return string containing the full name of the class
-    */
-    std::string toString() const final { return "DistanceEstimatorRenderer"; }
-    void commit() final;
-
-private:
-    // Transfer function
+protected:
+    ospray::Ref<ospray::Data> _simulationData;
+    ospray::uint64 _simulationDataSize;
     ospray::Ref<ospray::Data> _transferFunctionDiffuseData;
     ospray::Ref<ospray::Data> _transferFunctionEmissionData;
-    ospray::int32 _transferFunctionSize;
     float _transferFunctionMinValue;
     float _transferFunctionRange;
-    float _threshold;
+    ospray::int32 _transferFunctionSize;
 
-    // Rendering
-    float _aoStrength{0};
-    float _aoDistance{100};
-    float _shadows{0};
-    float _softShadows{0};
-
-    // Fractals
-    ospray::int32 _volumeSamplesPerRay;
+    float _alphaCorrection;
 };
 }
+
+#endif // SIMULATIONRENDERER_H

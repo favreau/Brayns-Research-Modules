@@ -132,7 +132,7 @@ void ContoursRenderer_renderSample(uniform Renderer* uniform _self,
                                    varying ScreenSample& sample)
 {
     uniform ContoursRenderer* uniform self =
-        (uniform ContoursRenderer * uniform) _self;
+        (uniform ContoursRenderer * uniform)_self;
     sample.ray.time = self->abstract.timestamp;
     sample.rgb = ContoursRenderer_shadeRay(self, sample);
 }
@@ -155,13 +155,13 @@ export void ContoursRenderer_set(void* uniform _self, void* uniform bgMaterial,
                                  const uniform float& detectionDistance)
 {
     uniform ContoursRenderer* uniform self =
-        (uniform ContoursRenderer * uniform) _self;
+        (uniform ContoursRenderer * uniform)_self;
 
     self->abstract.bgMaterial =
-        (uniform ExtendedOBJMaterial * uniform) bgMaterial;
+        (uniform ExtendedOBJMaterial * uniform)bgMaterial;
 
     self->abstract.timestamp = timestamp;
-    self->abstract.spp = spp;
+    self->abstract.super.spp = spp;
 
     self->abstract.lights = (const uniform Light* uniform* uniform)lights;
     self->abstract.numLights = numLights;

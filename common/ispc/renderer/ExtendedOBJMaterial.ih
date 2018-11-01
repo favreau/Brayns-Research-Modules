@@ -28,7 +28,6 @@
 #include <ospray/SDK/texture/TextureParam.ih>
 #include <ospray/SDK/volume/Volume.ih>
 
-// Caution: This has to match the Brayns::MaterialShadingMode
 enum MaterialShadingMode
 {
     none = 0,

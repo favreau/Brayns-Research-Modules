@@ -30,6 +30,9 @@ const float ambientFactor = 2.f;
 struct PathTracingRenderer
 {
     AbstractRenderer abstract;
+    float aoStrength;
+    float aoDistance;
+    uint32 randomNumber;
 };
 
 inline vec3f pathTracingContribution(const uniform PathTracingRenderer* uniform
@@ -76,14 +79,14 @@ inline vec3f pathTracingContribution(const uniform PathTracingRenderer* uniform
         const vec3f N = dg.Ns;
 
         // compute ray direction of uniformly random diffuse ray
-        const vec3f raydir = getRandomVector(self->abstract.super.fb, sample, N,
-                                             self->abstract.randomNumber);
+        const vec3f raydir = getRandomVector(self->abstract.super.fb->size.x,
+                                             sample, N, self->randomNumber);
 
         // origin of new ray in path is hitpoint of previous ray in path
         const vec3f hitpoint = dg.P + (self->abstract.super.epsilon * N);
         setRay(localray, hitpoint, raydir);
         localray.t0 = self->abstract.super.epsilon;
-        localray.t = self->abstract.ambientOcclusionDistance;
+        localray.t = self->aoDistance;
 
 #if 0
         //***************************************
@@ -231,8 +234,7 @@ inline vec3f PathTracingRenderer_shadeRay(
             const vec3f specularColor = Ks * powf(cosLR, Ns);
 
             // Path tracing contribution
-            const float ao =
-                ambientFactor * self->abstract.ambientOcclusionStrength;
+            const float ao = ambientFactor * self->aoStrength;
             const vec3f pathTracingColor =
                 ao > 0.f ? Kd * ao * pathTracingContribution(self, sample)
                          : Kd * radiance * cosNL + specularColor;
@@ -323,11 +325,13 @@ export void* uniform PathTracingRenderer_create(void* uniform cppE)
     return self;
 }
 
-export void PathTracingRenderer_set(
-    void* uniform _self, void* uniform bgMaterial,
-    const uniform float& timestamp, void** uniform lights,
-    uniform int32 numLights, const uniform float& ambientOcclusionStrength,
-    const uniform float& ambientOcclusionDistance)
+export void PathTracingRenderer_set(void* uniform _self,
+                                    void* uniform bgMaterial,
+                                    const uniform float& timestamp,
+                                    void** uniform lights,
+                                    uniform int32 numLights,
+                                    const uniform float& aoStrength,
+                                    const uniform float& aoDistance)
 {
     uniform PathTracingRenderer* uniform self =
         (uniform PathTracingRenderer * uniform) _self;
@@ -335,10 +339,10 @@ export void PathTracingRenderer_set(
     self->abstract.bgMaterial =
         (uniform ExtendedOBJMaterial * uniform) bgMaterial;
 
-    self->abstract.ambientOcclusionStrength = ambientOcclusionStrength;
-    self->abstract.ambientOcclusionDistance = ambientOcclusionDistance;
     self->abstract.timestamp = timestamp;
-
     self->abstract.lights = (const uniform Light* uniform* uniform)lights;
     self->abstract.numLights = numLights;
+
+    self->aoStrength = aoStrength;
+    self->aoDistance = aoDistance;
 }

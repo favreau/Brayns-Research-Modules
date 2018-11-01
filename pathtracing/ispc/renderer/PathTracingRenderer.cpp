@@ -39,8 +39,7 @@ void PathTracingRenderer::commit()
     ispc::PathTracingRenderer_set(getIE(), (_bgMaterial ? _bgMaterial->getIE()
                                                         : nullptr),
                                   _timestamp, _lightPtr, _lightArray.size(),
-                                  _ambientOcclusionStrength,
-                                  _ambientOcclusionDistance);
+                                  _aoStrength, _aoDistance);
 }
 
 PathTracingRenderer::PathTracingRenderer()

@@ -41,8 +41,7 @@ private:
     std::vector<void*> _lightArray;
     void** _lightPtr;
 
-    Model* _world;
-    Camera* _camera;
+    ospray::Model* _world;
     ospray::Data* _lightData;
 
     ospray::vec3f _bgColor;

@@ -55,7 +55,7 @@ inline vec3f SSSRenderer_shadeRay(const uniform SSSRenderer* uniform self,
             vec4f color =
                 skyboxMapping((Renderer*)self, ray, self->abstract.bgMaterial);
             color.w = 1.f;
-            composite(color, intersectionColor);
+            composite(color, intersectionColor, 1.f);
             break;
         }
 
@@ -115,7 +115,7 @@ inline vec3f SSSRenderer_shadeRay(const uniform SSSRenderer* uniform self,
         const float g = max(0.f, dot(light, dg.Ns));
         const float angle = clamp(p + g, 0.f, 1.f);
         const vec4f color = make_vec4f(Kd * angle, opacity);
-        composite(color, intersectionColor);
+        composite(color, intersectionColor, 1.f);
 
         // Next ray
         ray.t0 = ray.t + dg.epsilon;
@@ -159,7 +159,7 @@ export void SSSRenderer_set(void* uniform _self, void* uniform bgMaterial,
         (uniform ExtendedOBJMaterial * uniform) bgMaterial;
 
     self->abstract.timestamp = timestamp;
-    self->abstract.spp = spp;
+    self->abstract.super.spp = spp;
 
     self->abstract.lights = (const uniform Light* uniform* uniform)lights;
     self->abstract.numLights = numLights;

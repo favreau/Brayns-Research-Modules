@@ -43,8 +43,7 @@ private:
     std::vector<void*> _materialArray;
     void** _materialPtr;
 
-    Model* _world;
-    Camera* _camera;
+    ospray::Model* _world;
     ospray::Data* _materialData;
     ospray::Data* _lightData;
 

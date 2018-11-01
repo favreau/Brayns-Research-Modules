@@ -46,7 +46,7 @@ void TransparencyRenderer::commit()
     _threshold = getParam1f("threshold", _transferFunctionMinValue);
 
     ispc::TransparencyRenderer_set(
-        getIE(), (_bgMaterial ? _bgMaterial->getIE() : nullptr), _randomNumber,
+        getIE(), (_bgMaterial ? _bgMaterial->getIE() : nullptr), rand() % 100,
         _timestamp, spp, _simulationData ? (float*)_simulationData->data : NULL,
         _simulationDataSize,
         _transferFunctionDiffuseData
