@@ -66,7 +66,7 @@ void FractalsRenderer::commit()
     _transferFunctionRange = getParam1f("transferFunctionRange", 255.f);
 
     // Volume
-    _volumeSamplesPerRay = 128; // getParam1i("volumeSamplesPerRay", 32);
+    _volumeSamplesPerRay = getParam1i("volumeSamplesPerRay", 64);
 
     ispc::FractalsRenderer_set(
         getIE(), (ispc::vec3f&)_bgColor, _shadows, _softShadows,
@@ -89,4 +89,4 @@ FractalsRenderer::FractalsRenderer()
 }
 
 OSP_REGISTER_RENDERER(FractalsRenderer, fractals);
-}
+} // namespace brayns

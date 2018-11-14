@@ -21,6 +21,8 @@
 
 #include <common/ispc/renderer/AbstractRenderer.ih>
 
+const unsigned int MAX_FRACTAL_ITERATIONS = 32;
+
 struct FractalsRenderer
 {
     Renderer super;
@@ -65,6 +67,40 @@ inline varying bool intersectBox(const varying Ray& ray, const vec3f& aabbMin,
     return (t0 <= t1);
 }
 
+inline uint8 getMandelBulbContribution(
+    const uniform FractalsRenderer* uniform self, const vec3f& point,
+    const unsigned int iterations)
+{
+    const float power = 8.f;
+    const vec3f P = 6.f * point - make_vec3f(0.125f);
+    vec3f w = P;
+    float m = dot(w, w);
+
+    vec4f trap = make_vec4f(abs(w), m);
+    float dz = 1.f;
+
+    int i = 0;
+    for (i = 0; i < 4; i++)
+    {
+        dz = power * pow(sqrt(m), 7.f) * dz + 1.f;
+
+        float r = length(w);
+        float b = power * acos(w.y / r);
+        float a = power * atan2(w.x, w.z);
+        w = P + pow(r, power) *
+                    make_vec3f(sin(b) * sin(a), cos(b), sin(b) * cos(a));
+
+        trap = min(trap, make_vec4f(abs(w), m));
+
+        m = dot(w, w);
+        if (m > 256.f)
+            break;
+    }
+
+    const float value = clamp(512.f * log(m) * sqrt(m) / dz, 0.f, 255.f);
+    return (uint8)(value);
+}
+
 inline varying uint8
     getJuliaContribution(const uniform FractalsRenderer* uniform self,
                          const vec3f& point, const unsigned int iterations)
@@ -76,7 +112,9 @@ inline varying uint8
     float newIm = point.y / 0.5f;
 
     uint8 n = 0;
-    for (n = 0; n < max(255, min(255, iterations)); ++n)
+    for (n = 0; n < max(MAX_FRACTAL_ITERATIONS,
+                        min(MAX_FRACTAL_ITERATIONS, iterations));
+         ++n)
     {
         float oldRe = newRe;
         float oldIm = newIm;
@@ -92,7 +130,9 @@ inline varying vec4f getVoxelColor(const uniform FractalsRenderer* uniform self,
                                    const vec3f& point,
                                    const unsigned int iterations)
 {
-    uint8 voxelValue = getJuliaContribution(self, point, iterations);
+    const uint8 voxelValue = getJuliaContribution(self, point, iterations);
+    //    const uint8 voxelValue = getMandelBulbContribution(self, point,
+    //    iterations);
     const float normalizedValue =
         clamp(((float)voxelValue - self->colorMapMinValue) /
                   (float)self->colorMapRange,
@@ -128,7 +168,8 @@ inline float getShadowContribution(const uniform FractalsRenderer* uniform self,
         for (float t = t0; pathOpacity < 1.f && t < t1; t += epsilon)
         {
             const vec3f p = ray.org + t * ray.dir;
-            const vec4f voxelColor = getVoxelColor(self, p, 255);
+            const vec4f voxelColor =
+                getVoxelColor(self, p, MAX_FRACTAL_ITERATIONS);
             pathOpacity += voxelColor.w;
         }
     }
@@ -147,23 +188,29 @@ inline vec3f FractalsRenderer_shadeRay(
     if (!intersectBox(sample.ray, aabbmin, aabbmax, t0, t1))
         return make_vec3f(self->bgColor);
 
+    t0 = max(0.f, t0);
+    t0 -= getRandomValue(sample, self->randomNumber) * ((t1 - t0) * 0.01f);
+
     const float epsilon = max(0.001f, 1.f / (float)(self->volumeSamplesPerRay));
+
+    bool shadowDone = false;
 
     for (float t = t0; pathOpacity < 1.f && t < t1; t += epsilon)
     {
         const vec3f point = (sample.ray.org + t * sample.ray.dir) - 0.5f;
-        vec4f voxelColor = getVoxelColor(self, point, 255);
+        vec4f voxelColor = getVoxelColor(self, point, MAX_FRACTAL_ITERATIONS);
 
         pathOpacity += voxelColor.w;
 
         // Shadow
-        if (voxelColor.w > 0.9f)
+        if (!shadowDone && voxelColor.w > 0.99f)
         {
             const float shadowContribution =
                 getShadowContribution(self, sample, point, epsilon);
             voxelColor.x *= 1.f - shadowContribution;
             voxelColor.y *= 1.f - shadowContribution;
             voxelColor.z *= 1.f - shadowContribution;
+            shadowDone = true;
         }
 
         composite(voxelColor, pathColor, 1.f);
@@ -184,7 +231,7 @@ void FractalsRenderer_renderSample(uniform Renderer* uniform _self,
                                    varying ScreenSample& sample)
 {
     uniform FractalsRenderer* uniform self =
-        (uniform FractalsRenderer * uniform)_self;
+        (uniform FractalsRenderer * uniform) _self;
     sample.ray.time = self->timestamp;
     sample.rgb = FractalsRenderer_shadeRay(self, sample);
 }
@@ -214,7 +261,7 @@ export void FractalsRenderer_set(
     const uniform float& colorMapRange)
 {
     uniform FractalsRenderer* uniform self =
-        (uniform FractalsRenderer * uniform)_self;
+        (uniform FractalsRenderer * uniform) _self;
 
     self->bgColor = bgColor;
     self->shadows = shadows;
@@ -227,9 +274,9 @@ export void FractalsRenderer_set(
     self->lights = (const uniform Light* uniform* uniform)lights;
     self->numLights = numLights;
 
-    self->colorMap = (uniform vec4f * uniform)colormap;
+    self->colorMap = (uniform vec4f * uniform) colormap;
     self->emissionIntensitiesMap =
-        (uniform vec3f * uniform)emissionIntensitiesMap;
+        (uniform vec3f * uniform) emissionIntensitiesMap;
     self->colorMapSize = colorMapSize;
     self->colorMapMinValue = colorMapMinValue;
     self->colorMapRange = colorMapRange;
