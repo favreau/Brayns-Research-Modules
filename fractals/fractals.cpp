@@ -23,8 +23,8 @@
 
 namespace ospray
 {
-extern "C" void ospray_init_module_fractals()
+extern "C" void ospray_init_module_braynsFractals()
 {
     std::cout << "[MODULE] initializing fractals plugin" << std::endl;
 }
-}
+} // namespace ospray

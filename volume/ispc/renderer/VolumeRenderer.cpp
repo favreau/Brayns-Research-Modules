@@ -107,6 +107,5 @@ VolumeRenderer::VolumeRenderer()
     ispcEquivalent = ispc::VolumeRenderer_create(this);
 }
 
-OSP_REGISTER_RENDERER(VolumeRenderer, VOLUME);
-OSP_REGISTER_RENDERER(VolumeRenderer, volume);
-}
+OSP_REGISTER_RENDERER(VolumeRenderer, research_volume);
+} // namespace brayns

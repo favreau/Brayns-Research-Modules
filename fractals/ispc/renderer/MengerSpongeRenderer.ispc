@@ -46,10 +46,10 @@ struct MengerSpongeRenderer
     // Menger params
     LinearSpace3f ma;
     uint32 samplesPerRay;
+    uint32 nbIterations;
 };
 
 const float FAR_PLANE = 100.f;
-const int MAP_NB_ITERATION = 4;
 
 inline float maxcomp(const vec3f& p)
 {
@@ -227,7 +227,7 @@ inline vec4f map(const uniform MengerSpongeRenderer* uniform self, vec3f& p)
     float s = 1.f;
     float ani = 0.f;
     float off = 0.f;
-    for (int m = 0; m < MAP_NB_ITERATION; m++)
+    for (int m = 0; m < self->nbIterations; m++)
     {
         if (m == 0)
         {
@@ -373,7 +373,7 @@ void MengerSpongeRenderer_renderSample(uniform Renderer* uniform _self,
                                        varying ScreenSample& sample)
 {
     uniform MengerSpongeRenderer* uniform self =
-        (uniform MengerSpongeRenderer * uniform)_self;
+        (uniform MengerSpongeRenderer * uniform) _self;
     sample.rgb = MengerSpongeRenderer_shadeRay(self, sample);
 }
 
@@ -392,10 +392,10 @@ export void MengerSpongeRenderer_set(
     const uniform float& shadows, const uniform float& softShadows,
     const uniform int& spp, void** uniform lights,
     const uniform int32 numLights, const uniform int32& samplesPerRay,
-    const uniform float& timestamp)
+    const uniform float& timestamp, const uniform int32& nbIterations)
 {
     uniform MengerSpongeRenderer* uniform self =
-        (uniform MengerSpongeRenderer * uniform)_self;
+        (uniform MengerSpongeRenderer * uniform) _self;
 
     self->bgColor = bgColor;
     self->shadows = shadows;
@@ -404,6 +404,7 @@ export void MengerSpongeRenderer_set(
     self->lights = (const uniform Light* uniform* uniform)lights;
     self->numLights = numLights;
     self->samplesPerRay = samplesPerRay;
+    self->nbIterations = nbIterations;
     self->timer = timestamp;
 
     self->ma = make_LinearSpace3f(make_vec3f(0.6f, 0.f, 0.8f),

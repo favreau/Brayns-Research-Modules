@@ -45,5 +45,5 @@ PbrRenderer::PbrRenderer()
     ispcEquivalent = ispc::PbrRenderer_create(this);
 }
 
-OSP_REGISTER_RENDERER(PbrRenderer, pbr);
-}
+OSP_REGISTER_RENDERER(PbrRenderer, research_pbr);
+} // namespace brayns

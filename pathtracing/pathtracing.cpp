@@ -23,8 +23,8 @@
 
 namespace ospray
 {
-extern "C" void ospray_init_module_pathtracing()
+extern "C" void ospray_init_module_braynsPathTracing()
 {
     std::cout << "[MODULE] initializing path tracing plugin" << std::endl;
 }
-}
+} // namespace ospray

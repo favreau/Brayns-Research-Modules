@@ -83,9 +83,9 @@ inline vec3f pathTracingContribution(const uniform PathTracingRenderer* uniform
                                              sample, N, self->randomNumber);
 
         // origin of new ray in path is hitpoint of previous ray in path
-        const vec3f hitpoint = dg.P + (self->abstract.super.epsilon * N);
+        const vec3f hitpoint = dg.P + dg.epsilon * N;
         setRay(localray, hitpoint, raydir);
-        localray.t0 = self->abstract.super.epsilon;
+        localray.t0 = dg.epsilon;
         localray.t = self->aoDistance;
 
 #if 0
@@ -190,7 +190,7 @@ inline vec3f PathTracingRenderer_shadeRay(
                     Kd = mat->Kd;
                     if (valid(mat->map_Kd))
                     {
-                        const vec4f value = get4f(mat->map_Kd, dg.st);
+                        const vec4f value = get4f(mat->map_Kd, dg);
                         Kd = make_vec3f(value);
                         opacity *= value.w;
                     }
@@ -198,10 +198,10 @@ inline vec3f PathTracingRenderer_shadeRay(
                     // Specular
                     Ks = mat->Ks;
                     if (valid(mat->map_Ks))
-                        Ks = get3f(mat->map_Ks, dg.st);
+                        Ks = get3f(mat->map_Ks, dg);
                     Ns = mat->Ns;
                     if (valid(mat->map_Ns))
-                        Ns = get1f(mat->map_Ns, dg.st);
+                        Ns = get1f(mat->map_Ns, dg);
 
                     // Refraction
                     refraction = mat->refraction;
@@ -210,19 +210,18 @@ inline vec3f PathTracingRenderer_shadeRay(
                     reflection = mat->reflection;
                     if (valid(mat->map_reflection))
                     {
-                        const vec4f value = get4f(mat->map_reflection, dg.st);
+                        const vec4f value = get4f(mat->map_reflection, dg);
                         Ns = value.x * 100.f;
                         reflection = value.w;
                     }
 
                     // Normal mapping
                     if (valid(mat->map_Bump))
-                        normal =
-                            normalize(normal * get3f(mat->map_Bump, dg.st));
+                        normal = normalize(normal * get3f(mat->map_Bump, dg));
 
                     // Emissive mapping
                     if (valid(mat->map_a))
-                        Kd = Kd + get3f(mat->map_a, dg.st);
+                        Kd = Kd + get3f(mat->map_a, dg);
                 }
 
             const vec3f reflectedNormal =
@@ -276,7 +275,7 @@ inline vec3f PathTracingRenderer_shadeRay(
                 ray.t0 = 0.f;
                 ray.dir = refractedVector(ray.dir, correctedNormal,
                                           oldlocalRefraction, refraction);
-                ray.org = intersection + self->abstract.super.epsilon * ray.dir;
+                ray.org = intersection + dg.epsilon * ray.dir;
 
                 pathOpacity -= (1.f - opacity);
                 oldlocalRefraction = refraction;
@@ -287,8 +286,7 @@ inline vec3f PathTracingRenderer_shadeRay(
                 // Reflection
                 ray.t0 = 0.f;
                 ray.dir = reflectedNormal;
-                ray.org = intersection +
-                          self->abstract.super.epsilon * reflectedNormal;
+                ray.org = intersection + dg.epsilon * reflectedNormal;
                 pathOpacity -= reflection;
                 ++depth;
             }

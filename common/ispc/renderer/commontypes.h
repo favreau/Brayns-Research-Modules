@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, EPFL/Blue Brain Project
+/* Copyright (c) 2018-2019, EPFL/Blue Brain Project
  * All rights reserved. Do not distribute without permission.
  * Responsible Author: Cyrille Favreau <cyrille.favreau@epfl.ch>
  *
@@ -19,18 +19,18 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#pragma once
+#ifndef COMMONTYPES_H
+#define COMMONTYPES_H
 
-#include "ExtendedOBJMaterial.ih"
-#include <ospray/SDK/math/vec.ih>
+enum MaterialShadingMode
+{
+    none = 0,
+    diffuse = 1,
+    electron = 2,
+    cartoon = 3,
+    electron_transparency = 4,
+    perlin = 5,
+    diffuse_transparency = 6,
+};
 
-/**
-    Returns the color of the skybox for a given ray. If no material is defined
-   for the skybox, the background color of the renderer is returned.
-    @param renderer Pointer to current renderer
-    @param ray Current ray
-    @param bgMaterial Background material
-    @return The RGBA color of the skybox
-*/
-vec4f skyboxMapping(const uniform Renderer* uniform renderer, const Ray& ray,
-                    const uniform ExtendedOBJMaterial* uniform bgMaterial);
+#endif // COMMONTYPES_H

@@ -20,8 +20,7 @@
  */
 
 #include <common/ispc/renderer/AbstractRenderer.ih>
-
-const unsigned int MAX_FRACTAL_ITERATIONS = 32;
+#include <ospray/SDK/common/Ray.ih>
 
 struct FractalsRenderer
 {
@@ -32,39 +31,29 @@ struct FractalsRenderer
     uint32 numLights;
     vec3f bgColor;
     float shadows;
-    bool shadingEnabled;
     float softShadows;
     int randomNumber;
     float timestamp;
     int spp;
 
-    // Transfer function / Color map attributes
-    uniform vec4f* uniform colorMap;
-    uniform vec3f* uniform emissionIntensitiesMap;
-    uint32 colorMapSize;
-    float colorMapMinValue;
-    float colorMapRange;
+    // Fractals
+    uint32 maxIterations;
+    bool julia;
+    float threshold;
+    float re;
+    float im;
 
-    // Volume dimension
-    vec3f volumeDimensions;
-    uint32 volumeSamplesPerRay;
+    // Transfer function attributes
+    const uniform TransferFunction* uniform transferFunction;
+    uint32 samplesPerRay;
 };
 
-inline varying bool intersectBox(const varying Ray& ray, const vec3f& aabbMin,
-                                 const vec3f& aabbMax, varying float& t0,
-                                 varying float& t1)
+export void FractalsRenderer_setTransferFunction(void* uniform _self,
+                                                 void* uniform value)
 {
-    Ray r = ray;
-    vec3f invR = 1.f / r.dir;
-    vec3f tbot = invR * (aabbMin - r.org);
-    vec3f ttop = invR * (aabbMax - r.org);
-    vec3f tmin = min(ttop, tbot);
-    vec3f tmax = max(ttop, tbot);
-    vec2f t = make_vec2f(max(tmin.x, tmin.y), max(tmin.x, tmin.z));
-    t0 = max(t.x, t.y);
-    t = make_vec2f(min(tmax.x, tmax.y), min(tmax.x, tmax.z));
-    t1 = min(t.x, t.y);
-    return (t0 <= t1);
+    uniform FractalsRenderer* uniform self =
+        (uniform FractalsRenderer * uniform) _self;
+    self->transferFunction = (TransferFunction * uniform) value;
 }
 
 inline uint8 getMandelBulbContribution(
@@ -105,15 +94,15 @@ inline varying uint8
     getJuliaContribution(const uniform FractalsRenderer* uniform self,
                          const vec3f& point, const unsigned int iterations)
 {
-    const float cRe = -0.7f;
-    const float cIm = 0.27015f + 3.f * point.z;
+    const float cRe = self->re;                 // -0.7f
+    const float cIm = 3.f * point.z + self->im; // 0.27015f
 
     float newRe = 1.5f * point.x / 0.5f;
     float newIm = point.y / 0.5f;
 
     uint8 n = 0;
-    for (n = 0; n < max(MAX_FRACTAL_ITERATIONS,
-                        min(MAX_FRACTAL_ITERATIONS, iterations));
+    for (n = 0;
+         n < max(self->maxIterations, min(self->maxIterations, iterations));
          ++n)
     {
         float oldRe = newRe;
@@ -130,22 +119,36 @@ inline varying vec4f getVoxelColor(const uniform FractalsRenderer* uniform self,
                                    const vec3f& point,
                                    const unsigned int iterations)
 {
-    const uint8 voxelValue = getJuliaContribution(self, point, iterations);
-    //    const uint8 voxelValue = getMandelBulbContribution(self, point,
-    //    iterations);
-    const float normalizedValue =
-        clamp(((float)voxelValue - self->colorMapMinValue) /
-                  (float)self->colorMapRange,
-              0.f, 1.f);
+    const uint8 voxelValue =
+        self->julia ? getJuliaContribution(self, point, iterations)
+                    : getMandelBulbContribution(self, point, iterations);
+#if 0
+    const uniform TransferFunction* uniform tf = self->transferFunction;
+    if (tf)
+        return make_vec4f(tf->getColorForValue(tf, voxelValue),
+                          tf->getOpacityForValue(tf, voxelValue));
+    else
+        return make_vec4f(1.f, 0.f, 0.f, 1.f);
+#else
+    float v = (float)voxelValue / (float)self->maxIterations;
+    if (v > self->threshold)
+        return make_vec4f(1.f, v, 1.f - v, v);
+    else
+        return make_vec4f(0.f);
 
-    // Voxel color according to colormap value
-    return self->colorMap[self->colorMapSize * normalizedValue];
+#endif
 }
 
 inline float getShadowContribution(const uniform FractalsRenderer* uniform self,
                                    varying ScreenSample& sample,
                                    const vec3f point, const float epsilon)
 {
+#if 0
+    Volume* uniform volume = self->super.model->volumes[0];
+    if (!volume)
+        return 0.f;
+#endif
+
     float pathOpacity = 0.f;
     for (uniform int i = 0;
          pathOpacity < 1.f && self->lights && i < self->numLights; ++i)
@@ -160,16 +163,22 @@ inline float getShadowContribution(const uniform FractalsRenderer* uniform self,
         ray.dir = neg(lightSample.dir);
         ray.org = point;
         float t0, t1;
+#if 0
         const vec3f aabbmin = make_vec3f(-0.5f);
         const vec3f aabbmax = make_vec3f(0.5f);
-        if (!intersectBox(ray, aabbmin, aabbmax, t0, t1))
-            break;
+        intersectBox(ray, volume->boundingBox, t0, t1);
+        if (t0 == t1)
+            continue;
+#else
+        t0 = 0.f;
+        t1 = 1.f;
+#endif
 
         for (float t = t0; pathOpacity < 1.f && t < t1; t += epsilon)
         {
             const vec3f p = ray.org + t * ray.dir;
             const vec4f voxelColor =
-                getVoxelColor(self, p, MAX_FRACTAL_ITERATIONS);
+                getVoxelColor(self, p, self->maxIterations);
             pathOpacity += voxelColor.w;
         }
     }
@@ -183,22 +192,30 @@ inline vec3f FractalsRenderer_shadeRay(
     float pathOpacity = 0.f;
 
     float t0, t1;
-    const vec3f aabbmin = make_vec3f(0.f);
-    const vec3f aabbmax = make_vec3f(1.f);
-    if (!intersectBox(sample.ray, aabbmin, aabbmax, t0, t1))
+#if 0
+    Volume* uniform volume = self->super.model->volumes[0];
+    if (!volume)
+        return make_vec3f(1.f, 0.f, 0.f);
+
+    intersectBox(sample.ray, volume->boundingBox, t0, t1);
+    if (t0 == t1)
         return make_vec3f(self->bgColor);
 
     t0 = max(0.f, t0);
     t0 -= getRandomValue(sample, self->randomNumber) * ((t1 - t0) * 0.01f);
+#else
+    t0 = 0.f;
+    t1 = 1.f;
+#endif
 
-    const float epsilon = max(0.001f, 1.f / (float)(self->volumeSamplesPerRay));
+    const float epsilon = max(0.001f, 1.f / (float)(self->samplesPerRay));
 
     bool shadowDone = false;
 
     for (float t = t0; pathOpacity < 1.f && t < t1; t += epsilon)
     {
         const vec3f point = (sample.ray.org + t * sample.ray.dir) - 0.5f;
-        vec4f voxelColor = getVoxelColor(self, point, MAX_FRACTAL_ITERATIONS);
+        vec4f voxelColor = getVoxelColor(self, point, self->maxIterations);
 
         pathOpacity += voxelColor.w;
 
@@ -249,16 +266,12 @@ export void* uniform FractalsRenderer_create(void* uniform cppE)
 export void FractalsRenderer_set(
     void* uniform _self, const uniform vec3f& bgColor,
     const uniform float& shadows, const uniform float& softShadows,
-    const uniform float& ambientOcclusionStrength,
-    const uniform float& ambientOcclusionDistance,
-    const uniform bool& shadingEnabled, const uniform int& randomNumber,
-    const uniform float& timestamp, const uniform int& spp,
-    const uniform bool& electronShadingEnabled, void** uniform lights,
-    const uniform int32 numLights, const uniform int32& volumeSamplesPerRay,
-    uniform vec4f* uniform colormap,
-    uniform vec3f* uniform emissionIntensitiesMap,
-    const uniform int32 colorMapSize, const uniform float& colorMapMinValue,
-    const uniform float& colorMapRange)
+    const uniform int& randomNumber, const uniform float& timestamp,
+    const uniform int& spp, void** uniform lights,
+    const uniform int32 numLights, const uniform int32& samplesPerRay,
+    const uniform int32& maxIterations, const uniform bool& julia,
+    const uniform float& threshold, const uniform float& re,
+    const uniform float& im)
 {
     uniform FractalsRenderer* uniform self =
         (uniform FractalsRenderer * uniform) _self;
@@ -266,7 +279,6 @@ export void FractalsRenderer_set(
     self->bgColor = bgColor;
     self->shadows = shadows;
     self->softShadows = softShadows;
-    self->shadingEnabled = shadingEnabled;
     self->randomNumber = randomNumber;
     self->timestamp = timestamp;
     self->spp = spp;
@@ -274,13 +286,10 @@ export void FractalsRenderer_set(
     self->lights = (const uniform Light* uniform* uniform)lights;
     self->numLights = numLights;
 
-    self->colorMap = (uniform vec4f * uniform) colormap;
-    self->emissionIntensitiesMap =
-        (uniform vec3f * uniform) emissionIntensitiesMap;
-    self->colorMapSize = colorMapSize;
-    self->colorMapMinValue = colorMapMinValue;
-    self->colorMapRange = colorMapRange;
-
-    self->volumeSamplesPerRay = volumeSamplesPerRay;
-    self->volumeDimensions = make_vec3f(1.f);
+    self->samplesPerRay = samplesPerRay;
+    self->maxIterations = maxIterations;
+    self->julia = julia;
+    self->threshold = threshold;
+    self->re = re;
+    self->im = im;
 }

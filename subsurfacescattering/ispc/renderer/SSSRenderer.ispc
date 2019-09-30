@@ -119,7 +119,7 @@ inline vec3f SSSRenderer_shadeRay(const uniform SSSRenderer* uniform self,
 
         // Next ray
         ray.t0 = ray.t + dg.epsilon;
-        ray.t = infinity;
+        ray.t = inf;
         ray.primID = -1;
         ray.geomID = -1;
         ray.instID = -1;

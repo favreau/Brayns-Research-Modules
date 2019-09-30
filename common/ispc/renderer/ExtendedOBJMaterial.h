@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include <brayns/common/commonTypes.h>
+#include "Consts.ih"
+#include "commontypes.h"
 
 #include <ospray/SDK/common/Material.h>
 #include <ospray/SDK/texture/Texture2D.h>

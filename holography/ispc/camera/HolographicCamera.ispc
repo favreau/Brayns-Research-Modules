@@ -48,7 +48,7 @@ void HolographicCamera_initRay(uniform Camera* uniform _self, varying Ray& ray,
     screen = Camera_subRegion(_self, screen);
 
     float nearClip = self->super.nearClip;
-    float farClip = infinity;
+    float farClip = inf;
 
     vec2f sc = screen;
     vec3f dir;

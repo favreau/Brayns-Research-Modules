@@ -45,6 +45,5 @@ CartoonRenderer::CartoonRenderer()
     ispcEquivalent = ispc::CartoonRenderer_create(this);
 }
 
-OSP_REGISTER_RENDERER(CartoonRenderer, CARTOON);
-OSP_REGISTER_RENDERER(CartoonRenderer, cartoon);
-}
+OSP_REGISTER_RENDERER(CartoonRenderer, research_cartoon);
+} // namespace brayns

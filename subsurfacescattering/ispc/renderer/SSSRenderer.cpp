@@ -45,5 +45,5 @@ SSSRenderer::SSSRenderer()
     ispcEquivalent = ispc::SSSRenderer_create(this);
 }
 
-OSP_REGISTER_RENDERER(SSSRenderer, sss);
+OSP_REGISTER_RENDERER(SSSRenderer, research_subsurface_scattering);
 } // namespace brayns

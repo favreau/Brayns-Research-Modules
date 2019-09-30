@@ -49,5 +49,5 @@ ContoursRenderer::ContoursRenderer()
     ispcEquivalent = ispc::ContoursRenderer_create(this);
 }
 
-OSP_REGISTER_RENDERER(ContoursRenderer, contours);
-}
+OSP_REGISTER_RENDERER(ContoursRenderer, research_contours);
+} // namespace brayns

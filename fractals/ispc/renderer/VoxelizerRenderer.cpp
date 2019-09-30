@@ -99,5 +99,5 @@ VoxelizerRenderer::VoxelizerRenderer()
     ispcEquivalent = ispc::VoxelizerRenderer_create(this);
 }
 
-OSP_REGISTER_RENDERER(VoxelizerRenderer, voxelizer);
-}
+OSP_REGISTER_RENDERER(VoxelizerRenderer, research_voxelizer);
+} // namespace brayns

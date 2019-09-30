@@ -36,10 +36,9 @@ void PathTracingRenderer::commit()
 {
     AbstractRenderer::commit();
 
-    ispc::PathTracingRenderer_set(getIE(), (_bgMaterial ? _bgMaterial->getIE()
-                                                        : nullptr),
-                                  _timestamp, _lightPtr, _lightArray.size(),
-                                  _aoStrength, _aoDistance);
+    ispc::PathTracingRenderer_set(
+        getIE(), (_bgMaterial ? _bgMaterial->getIE() : nullptr), _timestamp,
+        _lightPtr, _lightArray.size(), _aoStrength, _aoDistance);
 }
 
 PathTracingRenderer::PathTracingRenderer()
@@ -47,5 +46,5 @@ PathTracingRenderer::PathTracingRenderer()
     ispcEquivalent = ispc::PathTracingRenderer_create(this);
 }
 
-OSP_REGISTER_RENDERER(PathTracingRenderer, pathtracing);
-}
+OSP_REGISTER_RENDERER(PathTracingRenderer, research_path_tracing);
+} // namespace brayns

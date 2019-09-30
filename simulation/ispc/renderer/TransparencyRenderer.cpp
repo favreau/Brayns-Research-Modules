@@ -64,5 +64,5 @@ TransparencyRenderer::TransparencyRenderer()
     ispcEquivalent = ispc::TransparencyRenderer_create(this);
 }
 
-OSP_REGISTER_RENDERER(TransparencyRenderer, transparency);
+OSP_REGISTER_RENDERER(TransparencyRenderer, research_transparency);
 } // namespace brayns

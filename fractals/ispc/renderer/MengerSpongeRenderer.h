@@ -53,5 +53,6 @@ private:
 
     // Fractals
     ospray::int32 _samplesPerRay;
+    ospray::int32 _nbIterations;
 };
-}
+} // namespace brayns

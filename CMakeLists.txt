@@ -17,6 +17,7 @@ find_package(ospray REQUIRED SYSTEM)
 include(ispc)
 
 # Add modules
+add_subdirectory(plugin)
 add_subdirectory(common)
 add_subdirectory(cartoon)
 add_subdirectory(fractals)

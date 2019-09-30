@@ -23,8 +23,8 @@
 
 namespace ospray
 {
-extern "C" void ospray_init_module_cartoon()
+extern "C" void ospray_init_module_braynsCartoon()
 {
     std::cout << "[MODULE] initializing cartoon plugin" << std::endl;
 }
-}
+} // namespace ospray

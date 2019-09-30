@@ -28,6 +28,9 @@
 // ispc exports
 #include "FractalsRenderer_ispc.h"
 
+// ospray
+#include <ospray/SDK/transferFunction/TransferFunction.h>
+
 using namespace ospray;
 
 namespace brayns
@@ -49,38 +52,30 @@ void FractalsRenderer::commit()
     _bgColor = getParam3f("bgColor", ospray::vec3f(0.f));
     _shadows = getParam1f("shadows", 0.f);
     _softShadows = getParam1f("softShadows", 0.f);
-    _ambientOcclusionStrength = getParam1f("aoWeight", 0.f);
-    _ambientOcclusionDistance = getParam1f("aoDistance", 1e20f);
-    _shadingEnabled = bool(getParam1i("shadingEnabled", 1));
     _randomNumber = getParam1i("randomNumber", 0);
     _timestamp = getParam1f("timestamp", 0.f);
     _spp = getParam1i("spp", 1);
-    _electronShadingEnabled = bool(getParam1i("electronShading", 0));
 
     // Transfer function
-    _transferFunctionDiffuseData = getParamData("transferFunctionDiffuseData");
-    _transferFunctionEmissionData =
-        getParamData("transferFunctionEmissionData");
-    _transferFunctionSize = getParam1i("transferFunctionSize", 255);
-    _transferFunctionMinValue = getParam1f("transferFunctionMinValue", 0.f);
-    _transferFunctionRange = getParam1f("transferFunctionRange", 255.f);
+    ospray::TransferFunction* transferFunction =
+        (ospray::TransferFunction*)getParamObject("transferFunction", nullptr);
+    if (transferFunction)
+        ispc::FractalsRenderer_setTransferFunction(getIE(),
+                                                   transferFunction->getIE());
+    else
+        ispc::FractalsRenderer_setTransferFunction(getIE(), nullptr);
 
-    // Volume
-    _volumeSamplesPerRay = getParam1i("volumeSamplesPerRay", 64);
+    _samplesPerRay = getParam1i("samplesPerRay", 64);
+    _maxIterations = getParam1i("maxIterations", 64);
+    _julia = getParam("julia", 0);
+    _threshold = getParam1f("threshold", 0.f);
+    _re = getParam1f("re", -0.7f);
+    _im = getParam1f("im", 0.27015f);
 
-    ispc::FractalsRenderer_set(
-        getIE(), (ispc::vec3f&)_bgColor, _shadows, _softShadows,
-        _ambientOcclusionStrength, _ambientOcclusionDistance, _shadingEnabled,
-        _randomNumber, _timestamp, _spp, _electronShadingEnabled, _lightPtr,
-        _lightArray.size(), _volumeSamplesPerRay,
-        _transferFunctionDiffuseData
-            ? (ispc::vec4f*)_transferFunctionDiffuseData->data
-            : NULL,
-        _transferFunctionEmissionData
-            ? (ispc::vec3f*)_transferFunctionEmissionData->data
-            : NULL,
-        _transferFunctionSize, _transferFunctionMinValue,
-        _transferFunctionRange);
+    ispc::FractalsRenderer_set(getIE(), (ispc::vec3f&)_bgColor, _shadows,
+                               _softShadows, _randomNumber, _timestamp, _spp,
+                               _lightPtr, _lightArray.size(), _samplesPerRay,
+                               _maxIterations, _julia, _threshold, _re, _im);
 }
 
 FractalsRenderer::FractalsRenderer()
@@ -88,5 +83,5 @@ FractalsRenderer::FractalsRenderer()
     ispcEquivalent = ispc::FractalsRenderer_create(this);
 }
 
-OSP_REGISTER_RENDERER(FractalsRenderer, fractals);
+OSP_REGISTER_RENDERER(FractalsRenderer, research_fractals);
 } // namespace brayns

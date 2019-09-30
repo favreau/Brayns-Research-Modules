@@ -5,7 +5,7 @@
 # This file is part of https://github.com/favreau/Brayns-Research-Modules
 
 cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
-set(MODULE_NAME ospray_module_fractals)
+set(MODULE_NAME ospray_module_braynsFractals)
 project(${MODULE_NAME} VERSION 1.0.0)
 set(${MODULE_NAME}_VERSION_ABI 1)
 

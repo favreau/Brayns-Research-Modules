@@ -53,13 +53,14 @@ void MengerSpongeRenderer::commit()
     _shadows = getParam1f("shadows", 0.f);
     _softShadows = getParam1f("softShadows", 0.f);
     _spp = getParam1i("spp", 1);
-    _samplesPerRay = getParam1i("volumeSamplesPerRay", 32);
+    _samplesPerRay = getParam1i("samplesPerRay", 32);
+    _nbIterations = getParam1i("nbIterations", 4);
     _timestamp = getParam1f("timestamp", 0.f);
 
     ispc::MengerSpongeRenderer_set(getIE(), (ispc::vec3f&)_bgColor, _shadows,
                                    _softShadows, _spp, _lightPtr,
                                    _lightArray.size(), _samplesPerRay,
-                                   _timestamp);
+                                   _timestamp, _nbIterations);
 }
 
 MengerSpongeRenderer::MengerSpongeRenderer()
@@ -67,5 +68,5 @@ MengerSpongeRenderer::MengerSpongeRenderer()
     ispcEquivalent = ispc::MengerSpongeRenderer_create(this);
 }
 
-OSP_REGISTER_RENDERER(MengerSpongeRenderer, mengersponge);
-}
+OSP_REGISTER_RENDERER(MengerSpongeRenderer, research_menger_sponge);
+} // namespace brayns

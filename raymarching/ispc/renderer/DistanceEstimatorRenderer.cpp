@@ -66,5 +66,5 @@ DistanceEstimatorRenderer::DistanceEstimatorRenderer()
     ispcEquivalent = ispc::DistanceEstimatorRenderer_create(this);
 }
 
-OSP_REGISTER_RENDERER(DistanceEstimatorRenderer, distanceestimator);
+OSP_REGISTER_RENDERER(DistanceEstimatorRenderer, research_distance_estimator);
 } // namespace brayns

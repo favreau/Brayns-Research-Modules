@@ -1,9 +1,9 @@
-/* Copyright (c) 2018, EPFL/Blue Brain Project
+/* Copyright (c) 2018-2019, EPFL/Blue Brain Project
  * All rights reserved. Do not distribute without permission.
  * Responsible Author: Cyrille Favreau <cyrille.favreau@epfl.ch>
  *
- * This file is part of the circuit explorer for Brayns
- * <https://github.com/favreau/Brayns-UC-CircuitExplorer>
+ * This file is part of the Brayns research modules
+ * <https://github.com/favreau/Brayns-Research-Modules>
  *
  * This library is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 3.0 as published
@@ -19,18 +19,20 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#pragma once
+#ifndef BRAYNS_RESEARCH_MODULES_PLUGIN_H
+#define BRAYNS_RESEARCH_MODULES_PLUGIN_H
 
-#include "ExtendedOBJMaterial.ih"
-#include <ospray/SDK/math/vec.ih>
+#include <brayns/pluginapi/ExtensionPlugin.h>
 
 /**
-    Returns the color of the skybox for a given ray. If no material is defined
-   for the skybox, the background color of the renderer is returned.
-    @param renderer Pointer to current renderer
-    @param ray Current ray
-    @param bgMaterial Background material
-    @return The RGBA color of the skybox
-*/
-vec4f skyboxMapping(const uniform Renderer* uniform renderer, const Ray& ray,
-                    const uniform ExtendedOBJMaterial* uniform bgMaterial);
+ * @brief The BraynsResearchModulesPlugin class manages the Brayns research
+ * modules
+ */
+class BraynsResearchModulesPlugin : public brayns::ExtensionPlugin
+{
+public:
+    BraynsResearchModulesPlugin();
+
+    void init() final;
+};
+#endif // BRAYNS_RESEARCH_MODULES_PLUGIN_H
