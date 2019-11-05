@@ -57,6 +57,11 @@ void _addVoxelizerRenderer(brayns::Engine& engine)
 {
     PLUGIN_INFO << "Registering Voxelizer renderer" << std::endl;
     brayns::PropertyMap properties;
+    properties.setProperty({"shadows", 0., 0., 1., {"Shadow intensity"}});
+    properties.setProperty({"softShadows", 0., 0., 1., {"Shadow softness"}});
+    properties.setProperty({"samplesPerRay", 64, 4, 1024, {"Samples per ray"}});
+    properties.setProperty({"pixelOpacity", 0.2, 0.01, 1.0, {"Pixel opacity"}});
+    properties.setProperty({"divider", 4096.0, 1.0, 65536.0, {"Divider"}});
     engine.addRendererType("research_voxelizer", properties);
 }
 

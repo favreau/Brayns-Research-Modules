@@ -69,5 +69,9 @@ private:
 
     // Voxelizer
     ospray::int32 _volumeSamplesPerRay;
+
+    // Divider
+    float _divider;
+    float _pixelOpacity;
 };
-}
+} // namespace brayns

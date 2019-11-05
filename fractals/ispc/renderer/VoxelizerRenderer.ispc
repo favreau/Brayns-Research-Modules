@@ -213,9 +213,14 @@ struct VoxelizerRenderer
     float colorMapRange;
     float threshold;
 
+    float pixelOpacity;
+
     // Volume dimension
     vec3f volumeDimensions;
     uint32 volumeSamplesPerRay;
+
+    // Divider
+    float divider;
 };
 
 inline varying bool intersectBox(const varying Ray& ray, const vec3f& aabbMin,
@@ -247,14 +252,17 @@ inline varying vec4f getVoxelColor(
         const float field = 1.f / (len * len);
         value += field;
     }
-    value = min(255.f, max(0.f, value / 255.f));
 
-    const uint8 voxelValue = value;
-    const float normalizedValue =
-        (voxelValue - self->colorMapMinValue) / self->colorMapRange;
+    value = clamp(value / self->divider, 0.f, 1.f);
+    return make_vec4f(0.f, 1.f - value, value,
+                      (value < 0.2f ? 0.f : self->pixelOpacity));
 
-    // Voxel color according to colormap value
-    return self->colorMap[self->colorMapSize * normalizedValue];
+    //    const uint8 voxelValue = value;
+    //    const float normalizedValue =
+    //        (voxelValue - self->colorMapMinValue) / self->colorMapRange;
+
+    //    // Voxel color according to colormap value
+    //    return self->colorMap[self->colorMapSize * normalizedValue];
 }
 
 inline float getShadowContribution(
@@ -288,7 +296,7 @@ inline float getShadowContribution(
         {
             const vec3f p = point + t * dir;
             const vec4f voxelColor = getVoxelColor(self, p);
-            pathOpacity += voxelColor.w;
+            pathOpacity += (voxelColor.w > 0.f ? 1.f : 0.f);
         }
     }
     return pathOpacity;
@@ -323,8 +331,11 @@ inline vec3f VoxelizerRenderer_shadeRay(
     {
         point = (sample.ray.org + t * sample.ray.dir) - 0.5f;
         vec4f voxelColor = getVoxelColor(self, point);
+        const bool hit = (voxelColor.w > 0.f);
         pathOpacity += voxelColor.w;
         composite(voxelColor, pathColor, 1.f);
+        if (hit)
+            break;
     }
 
     // Shadow
@@ -353,7 +364,7 @@ void VoxelizerRenderer_renderSample(uniform Renderer* uniform _self,
                                     varying ScreenSample& sample)
 {
     uniform VoxelizerRenderer* uniform self =
-        (uniform VoxelizerRenderer * uniform)_self;
+        (uniform VoxelizerRenderer * uniform) _self;
     sample.ray.time = self->timestamp;
     sample.rgb = VoxelizerRenderer_shadeRay(self, sample);
 }
@@ -381,10 +392,11 @@ export void VoxelizerRenderer_set(
     uniform vec4f* uniform colormap,
     uniform vec3f* uniform emissionIntensitiesMap,
     const uniform int32 colorMapSize, const uniform float& colorMapMinValue,
-    const uniform float& colorMapRange, const uniform float& threshold)
+    const uniform float& colorMapRange, const uniform float& threshold,
+    const uniform float& divider, const uniform float& pixelOpacity)
 {
     uniform VoxelizerRenderer* uniform self =
-        (uniform VoxelizerRenderer * uniform)_self;
+        (uniform VoxelizerRenderer * uniform) _self;
 
     self->bgColor = bgColor;
     self->shadows = shadows;
@@ -404,9 +416,9 @@ export void VoxelizerRenderer_set(
         (const uniform ExtendedOBJMaterial* uniform* uniform)materials;
     self->numMaterials = numMaterials;
 
-    self->colorMap = (uniform vec4f * uniform)colormap;
+    self->colorMap = (uniform vec4f * uniform) colormap;
     self->emissionIntensitiesMap =
-        (uniform vec3f * uniform)emissionIntensitiesMap;
+        (uniform vec3f * uniform) emissionIntensitiesMap;
     self->colorMapSize = colorMapSize;
     self->colorMapMinValue = colorMapMinValue;
     self->colorMapRange = colorMapRange;
@@ -415,4 +427,7 @@ export void VoxelizerRenderer_set(
 
     self->volumeSamplesPerRay = volumeSamplesPerRay;
     self->volumeDimensions = make_vec3f(1.f);
+
+    self->divider = divider;
+    self->pixelOpacity = pixelOpacity;
 }

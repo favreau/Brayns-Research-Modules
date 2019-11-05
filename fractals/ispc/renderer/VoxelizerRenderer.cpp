@@ -76,7 +76,11 @@ void VoxelizerRenderer::commit()
     _threshold = getParam1f("threshold", _transferFunctionMinValue);
 
     // Volume
-    _volumeSamplesPerRay = getParam1i("volumeSamplesPerRay", 32);
+    _volumeSamplesPerRay = getParam1i("samplesPerRay", 32);
+
+    // Extra
+    _divider = getParam1f("divider", 4096.f);
+    _pixelOpacity = getParam1f("pixelOpacity", 0.2f);
 
     ispc::VoxelizerRenderer_set(
         getIE(), (ispc::vec3f&)_bgColor, _shadows, _softShadows,
@@ -91,7 +95,7 @@ void VoxelizerRenderer::commit()
             ? (ispc::vec3f*)_transferFunctionEmissionData->data
             : NULL,
         _transferFunctionSize, _transferFunctionMinValue,
-        _transferFunctionRange, _threshold);
+        _transferFunctionRange, _threshold, _divider, _pixelOpacity);
 }
 
 VoxelizerRenderer::VoxelizerRenderer()
