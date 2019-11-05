@@ -25,6 +25,20 @@
 #include <brayns/engine/Engine.h>
 #include <brayns/pluginapi/PluginAPI.h>
 
+void _addClippingCamera(brayns::Engine& engine)
+{
+    PLUGIN_INFO << "Registering sphere clipping perspective camera"
+                << std::endl;
+
+    brayns::PropertyMap properties;
+    properties.setProperty({"fovy", 45., .1, 360., {"Field of view"}});
+    properties.setProperty({"aspect", 1., {"Aspect ratio"}});
+    properties.setProperty({"apertureRadius", 0., {"Aperture radius"}});
+    properties.setProperty({"focusDistance", 1., {"Focus Distance"}});
+    properties.setProperty({"enableClippingPlanes", true, {"Clipping"}});
+    engine.addCameraType("circuit_explorer_sphere_clipping", properties);
+}
+
 void _addFractalsRenderer(brayns::Engine& engine)
 {
     PLUGIN_INFO << "Registering fratals renderer" << std::endl;
@@ -108,6 +122,7 @@ void BraynsResearchModulesPlugin::init()
     _addContoursRenderer(engine);
     _addPathTracingRenderer(engine);
     _addPBRRenderer(engine);
+    _addClippingCamera(engine);
 }
 
 extern "C" brayns::ExtensionPlugin* brayns_plugin_create(int /*argc*/,
