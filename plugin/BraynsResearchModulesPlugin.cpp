@@ -121,7 +121,7 @@ void BraynsResearchModulesPlugin::init()
     _addCartoonRenderer(engine);
     _addContoursRenderer(engine);
     _addPathTracingRenderer(engine);
-    _addPBRRenderer(engine);
+    //    _addPBRRenderer(engine);
     _addClippingCamera(engine);
 }
 

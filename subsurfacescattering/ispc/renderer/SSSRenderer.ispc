@@ -21,8 +21,6 @@
 
 #include <common/ispc/renderer/AbstractRenderer.ih>
 
-const unsigned int GRADIENT_SIZE = 4;
-
 struct SSSRenderer
 {
     AbstractRenderer abstract;
