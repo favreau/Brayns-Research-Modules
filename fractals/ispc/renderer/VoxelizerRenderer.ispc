@@ -198,27 +198,17 @@ struct VoxelizerRenderer
     float shadows;
     bool shadingEnabled;
     float softShadows;
-    float ambientOcclusionStrength;
-    float ambientOcclusionDistance;
-    bool electronShadingEnabled;
     int randomNumber;
     float timestamp;
     int spp;
 
-    // Transfer function / Color map attributes
-    uniform vec4f* uniform colorMap;
-    uniform vec3f* uniform emissionIntensitiesMap;
-    uint32 colorMapSize;
-    float colorMapMinValue;
-    float colorMapRange;
-    float threshold;
-
     float pixelOpacity;
+    float exposure;
 
-    // Volume dimension
     vec3f volumeDimensions;
     uint32 samplesPerRay;
     uint32 samplesPerShadowRay;
+    bool softnessEnabled;
 
     // Divider
     float divider;
@@ -260,11 +250,9 @@ inline varying vec4f getVoxelColor(
 }
 
 inline float getEpsilon(const uniform VoxelizerRenderer* uniform self,
-                        const float dist, const uint32 spr,
-                        const unsigned int iteration)
+                        const float dist, const uint32 spr)
 {
-    //    return max(0.001f, dist / (spr + 16 * min(iteration, 10)));
-    return max(0.001f, 1.f / spr);
+    return max(0.01f, dist / spr);
 }
 
 inline float getShadowContribution(
@@ -279,7 +267,7 @@ inline float getShadowContribution(
     for (uniform int i = 0; self->lights && i < self->numLights; ++i)
     {
         const uniform Light* uniform light = self->lights[i];
-        const varying vec2f s = make_vec2f(1.f / self->randomNumber);
+        const varying vec2f s = make_vec2f(0.5f);
         DifferentialGeometry dg;
         const varying Light_SampleRes lightSample = light->sample(light, dg, s);
 
@@ -305,8 +293,7 @@ inline float getShadowContribution(
             t1 = max(0.f, t1);
 
             const float epsilon =
-                getEpsilon(self, t1 - t0, self->samplesPerShadowRay,
-                           sample.sampleID.z);
+                getEpsilon(self, t1 - t0, self->samplesPerShadowRay);
 
             for (float t = t1 + epsilon; pathOpacity < 1.f && t > t0;
                  t -= epsilon)
@@ -320,9 +307,43 @@ inline float getShadowContribution(
     return pathOpacity;
 }
 
+inline vec4f shadeVoxel(const uniform VoxelizerRenderer* uniform self,
+                        varying ScreenSample& sample, const vec4f& color,
+                        const vec3f& normal)
+{
+    vec4f result = color;
+    for (uniform int i = 0; self->lights && i < self->numLights; ++i)
+    {
+        const uniform Light* uniform light = self->lights[i];
+        const varying vec2f s = make_vec2f(0.5f);
+        DifferentialGeometry dg;
+        const varying Light_SampleRes lightSample = light->sample(light, dg, s);
+
+        vec3f dir = lightSample.dir;
+        if (self->softShadows > 0.f)
+            dir =
+                normalize(self->softShadows *
+                          getRandomVector(self->super.fb->size.x, sample,
+                                          lightSample.dir, self->randomNumber));
+
+        const float cosNL = abs(dot(normal, dir));
+        result.x *= cosNL;
+        result.y *= cosNL;
+        result.z *= cosNL;
+    }
+    return result;
+}
+
 inline vec3f VoxelizerRenderer_shadeRay(
     const uniform VoxelizerRenderer* uniform self, varying ScreenSample& sample)
 {
+    const uint32 nbPositions = 14;
+    const vec3f positions[14] = {{0, -1, 0},   {0, 1, 0},   {-1, 0, 0},
+                                 {1, 0, 0},    {0, 0, 1},   {0, 0, -1},
+                                 {-1, -1, -1}, {1, -1, -1}, {-1, 1, -1},
+                                 {1, 1, -1},   {-1, -1, 1}, {1, -1, 1},
+                                 {-1, 1, 1},   {1, 1, 1}};
+
     vec4f pathColor = make_vec4f(0.f);
     float pathOpacity = 0.f;
 
@@ -332,47 +353,74 @@ inline vec3f VoxelizerRenderer_shadeRay(
 
     if (intersectBox(sample.ray, aabbmin, aabbmax, t0, t1))
     {
-        const float epsilon =
-            getEpsilon(self, t1 - t0, self->samplesPerRay, sample.sampleID.z);
+        const float epsilon = getEpsilon(self, t1 - t0, self->samplesPerRay);
 
-        const float random =
-            getRandomValue(sample, self->randomNumber) * epsilon;
-        t0 -= random;
-        t1 -= random;
+        if (self->softnessEnabled)
+        {
+            const float offset = (sample.sampleID.z % 16) * (epsilon / 16.f);
+            t0 += offset;
+            t1 += offset;
+        }
 
         float t = t0;
         vec3f point;
         bool hit = false;
         for (t = t0; pathOpacity < 1.f && t < t1 && !hit; t += epsilon)
         {
+            vec4f color = make_vec4f(0.f);
+
             point = sample.ray.org + t * sample.ray.dir;
-            vec4f voxelColor = getVoxelColor(self, point);
-            pathOpacity += voxelColor.w;
-            composite(voxelColor, pathColor, 1.f);
-            hit = voxelColor.w > 0.f;
-        }
+            color = getVoxelColor(self, point);
+            pathOpacity += color.w;
 
-        // Shadow
-        if (hit && pathOpacity > 0.5f && self->shadows > 0.f)
-        {
-            const float shadowContribution =
-                pathOpacity *
-                (1.f -
-                 self->shadows * getShadowContribution(self, sample, point));
-            pathColor.x *= shadowContribution;
-            pathColor.y *= shadowContribution;
-            pathColor.z *= shadowContribution;
-        }
+            if (color.w > 0.f && self->shadingEnabled)
+            {
+                vec3f normal = make_vec3f(0.f);
+                uint32 hits = 0;
+                for (int i = 0; i < nbPositions; ++i)
+                {
+                    point = positions[i] * epsilon + sample.ray.org +
+                            t * sample.ray.dir;
+                    const vec4f voxelColor = getVoxelColor(self, point);
+                    if (voxelColor.w > 0.f)
+                    {
+                        ++hits;
+                        normal = normal + positions[i];
+                    }
+                }
+                if (hits > 0)
+                {
+                    normal = make_vec3f(0.5f) + (normal / (float)hits);
+                    normal = normalize(normal);
+#if 0
+                    color = make_vec4f(normal, 1.f);
+#else
+                    color = shadeVoxel(self, sample, color, normal);
+#endif
+                }
+            }
 
-        // Combine with background color
-        const vec4f bgColor = make_vec4f(self->bgColor, 1.f);
-        composite(bgColor, pathColor, 1.f);
+            if (color.w > 0.f)
+            {
+                if (self->shadows > 0.f)
+                {
+                    const float shadowContribution =
+                        self->shadows *
+                        getShadowContribution(self, sample, point);
+                    color.x *= shadowContribution;
+                    color.y *= shadowContribution;
+                    color.z *= shadowContribution;
+                }
+                composite(color, pathColor, 1.f);
+            }
+        }
 
         sample.alpha = pathOpacity;
         sample.z = t;
     }
 
-    return make_vec3f(pathColor);
+    return clamp(make_vec3f(pathColor) * self->exposure, make_vec3f(0.f),
+                 make_vec3f(1.f));
 }
 
 void VoxelizerRenderer_renderSample(uniform Renderer* uniform _self,
@@ -398,17 +446,12 @@ export void* uniform VoxelizerRenderer_create(void* uniform cppE)
 export void VoxelizerRenderer_set(
     void* uniform _self, const uniform vec3f& bgColor,
     const uniform float& shadows, const uniform float& softShadows,
-    const uniform float& ambientOcclusionStrength,
-    const uniform float& ambientOcclusionDistance,
     const uniform bool& shadingEnabled, const uniform int& randomNumber,
     const uniform float& timestamp, const uniform int& spp,
-    const uniform bool& electronShadingEnabled, void** uniform lights,
+    const uniform bool& softnessEnabled, void** uniform lights,
     const uniform int32 numLights, void** uniform materials,
     const uniform int32 numMaterials, const uniform int32& samplesPerRay,
-    const uniform int32& samplesPerShadowRay, uniform vec4f* uniform colormap,
-    uniform vec3f* uniform emissionIntensitiesMap,
-    const uniform int32 colorMapSize, const uniform float& colorMapMinValue,
-    const uniform float& colorMapRange, const uniform float& threshold,
+    const uniform int32& samplesPerShadowRay, const uniform float& exposure,
     const uniform float& divider, const uniform float& pixelOpacity)
 {
     uniform VoxelizerRenderer* uniform self =
@@ -417,13 +460,11 @@ export void VoxelizerRenderer_set(
     self->bgColor = bgColor;
     self->shadows = shadows;
     self->softShadows = softShadows;
-    self->ambientOcclusionStrength = ambientOcclusionStrength;
-    self->ambientOcclusionDistance = ambientOcclusionDistance;
     self->shadingEnabled = shadingEnabled;
     self->randomNumber = randomNumber;
     self->timestamp = timestamp;
     self->spp = spp;
-    self->electronShadingEnabled = electronShadingEnabled;
+    self->exposure = exposure;
 
     self->lights = (const uniform Light* uniform* uniform)lights;
     self->numLights = numLights;
@@ -432,19 +473,11 @@ export void VoxelizerRenderer_set(
         (const uniform ExtendedOBJMaterial* uniform* uniform)materials;
     self->numMaterials = numMaterials;
 
-    self->colorMap = (uniform vec4f * uniform) colormap;
-    self->emissionIntensitiesMap =
-        (uniform vec3f * uniform) emissionIntensitiesMap;
-    self->colorMapSize = colorMapSize;
-    self->colorMapMinValue = colorMapMinValue;
-    self->colorMapRange = colorMapRange;
-
-    self->threshold = threshold;
-
     self->samplesPerRay = samplesPerRay;
     self->samplesPerShadowRay = samplesPerShadowRay;
     self->volumeDimensions = make_vec3f(1.f);
 
     self->divider = divider;
     self->pixelOpacity = pixelOpacity;
+    self->softnessEnabled = softnessEnabled;
 }

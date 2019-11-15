@@ -49,13 +49,12 @@ void VoxelizerRenderer::commit()
     _bgColor = getParam3f("bgColor", ospray::vec3f(1.f));
     _shadows = getParam1f("shadows", 0.f);
     _softShadows = getParam1f("softShadows", 0.f);
-    _ambientOcclusionStrength = getParam1f("aoWeight", 0.f);
-    _ambientOcclusionDistance = getParam1f("aoDistance", 1e20f);
     _shadingEnabled = bool(getParam1i("shadingEnabled", 1));
+    _softnessEnabled = bool(getParam1i("softnessEnabled", 0));
     _randomNumber = getParam1i("randomNumber", 0);
     _timestamp = getParam1f("timestamp", 0.f);
     _spp = getParam1i("spp", 1);
-    _electronShadingEnabled = bool(getParam1i("electronShading", 0));
+    _exposure = getParam1f("exposure", 1.f);
 
     // Those materials are used for simulation mapping only
     _materialData = (ospray::Data*)getParamData("materials");
@@ -66,16 +65,7 @@ void VoxelizerRenderer::commit()
                 ((ospray::Material**)_materialData->data)[i]->getIE());
     _materialPtr = _materialArray.empty() ? nullptr : &_materialArray[0];
 
-    // Transfer function
-    _transferFunctionDiffuseData = getParamData("transferFunctionDiffuseData");
-    _transferFunctionEmissionData =
-        getParamData("transferFunctionEmissionData");
-    _transferFunctionSize = getParam1i("transferFunctionSize", 0);
-    _transferFunctionMinValue = getParam1f("transferFunctionMinValue", 0.f);
-    _transferFunctionRange = getParam1f("transferFunctionRange", 0.f);
-    _threshold = getParam1f("threshold", _transferFunctionMinValue);
-
-    // Volume
+    // Sampling
     _samplesPerRay = getParam1i("samplesPerRay", 32);
     _samplesPerShadowRay = getParam1i("samplesPerShadowRay", 32);
 
@@ -83,20 +73,13 @@ void VoxelizerRenderer::commit()
     _divider = getParam1f("divider", 4096.f);
     _pixelOpacity = getParam1f("pixelOpacity", 0.2f);
 
-    ispc::VoxelizerRenderer_set(
-        getIE(), (ispc::vec3f&)_bgColor, _shadows, _softShadows,
-        _ambientOcclusionStrength, _ambientOcclusionDistance, _shadingEnabled,
-        _randomNumber, _timestamp, _spp, _electronShadingEnabled, _lightPtr,
-        _lightArray.size(), _materialPtr, _materialArray.size(), _samplesPerRay,
-        _samplesPerShadowRay,
-        _transferFunctionDiffuseData
-            ? (ispc::vec4f*)_transferFunctionDiffuseData->data
-            : NULL,
-        _transferFunctionEmissionData
-            ? (ispc::vec3f*)_transferFunctionEmissionData->data
-            : NULL,
-        _transferFunctionSize, _transferFunctionMinValue,
-        _transferFunctionRange, _threshold, _divider, _pixelOpacity);
+    ispc::VoxelizerRenderer_set(getIE(), (ispc::vec3f&)_bgColor, _shadows,
+                                _softShadows, _shadingEnabled, _randomNumber,
+                                _timestamp, _spp, _softnessEnabled, _lightPtr,
+                                _lightArray.size(), _materialPtr,
+                                _materialArray.size(), _samplesPerRay,
+                                _samplesPerShadowRay, _exposure, _divider,
+                                _pixelOpacity);
 }
 
 VoxelizerRenderer::VoxelizerRenderer()

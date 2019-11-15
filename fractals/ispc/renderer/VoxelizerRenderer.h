@@ -50,22 +50,12 @@ private:
     ospray::vec3f _bgColor;
     float _shadows;
     float _softShadows;
-    float _ambientOcclusionStrength;
-    float _ambientOcclusionDistance;
     bool _shadingEnabled;
-    bool _electronShadingEnabled;
-    bool _gradientBackgroundEnabled;
+    bool _softnessEnabled;
     int _randomNumber;
     float _timestamp;
+    float _exposure;
     int _spp;
-
-    // Transfer function
-    ospray::Ref<ospray::Data> _transferFunctionDiffuseData;
-    ospray::Ref<ospray::Data> _transferFunctionEmissionData;
-    ospray::int32 _transferFunctionSize;
-    float _transferFunctionMinValue;
-    float _transferFunctionRange;
-    float _threshold;
 
     // Voxelizer
     ospray::int32 _samplesPerRay;
