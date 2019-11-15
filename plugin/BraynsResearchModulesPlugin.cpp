@@ -73,9 +73,11 @@ void _addVoxelizerRenderer(brayns::Engine& engine)
     brayns::PropertyMap properties;
     properties.setProperty({"shadows", 0., 0., 1., {"Shadow intensity"}});
     properties.setProperty({"softShadows", 0., 0., 1., {"Shadow softness"}});
-    properties.setProperty({"samplesPerRay", 64, 4, 1024, {"Samples per ray"}});
-    properties.setProperty({"pixelOpacity", 0.2, 0.01, 1.0, {"Pixel opacity"}});
-    properties.setProperty({"divider", 4096.0, 1.0, 65536.0, {"Divider"}});
+    properties.setProperty({"samplesPerRay", 16, 4, 1024, {"Samples per ray"}});
+    properties.setProperty(
+        {"samplesPerShadowRay", 4, 4, 1024, {"Samples per shadow ray"}});
+    properties.setProperty({"pixelOpacity", 1.0, 0.01, 1.0, {"Pixel opacity"}});
+    properties.setProperty({"divider", 20000.0, 1.0, 50000.0, {"Divider"}});
     engine.addRendererType("research_voxelizer", properties);
 }
 

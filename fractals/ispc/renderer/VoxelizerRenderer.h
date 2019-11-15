@@ -68,7 +68,8 @@ private:
     float _threshold;
 
     // Voxelizer
-    ospray::int32 _volumeSamplesPerRay;
+    ospray::int32 _samplesPerRay;
+    ospray::int32 _samplesPerShadowRay;
 
     // Divider
     float _divider;

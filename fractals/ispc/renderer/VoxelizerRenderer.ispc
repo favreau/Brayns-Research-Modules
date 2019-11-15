@@ -217,7 +217,8 @@ struct VoxelizerRenderer
 
     // Volume dimension
     vec3f volumeDimensions;
-    uint32 volumeSamplesPerRay;
+    uint32 samplesPerRay;
+    uint32 samplesPerShadowRay;
 
     // Divider
     float divider;
@@ -254,29 +255,32 @@ inline varying vec4f getVoxelColor(
     }
 
     value = clamp(value / self->divider, 0.f, 1.f);
-    return make_vec4f(0.f, 1.f - value, value,
+    return make_vec4f(1.f, value, 0.f,
                       (value < 0.2f ? 0.f : self->pixelOpacity));
+}
 
-    //    const uint8 voxelValue = value;
-    //    const float normalizedValue =
-    //        (voxelValue - self->colorMapMinValue) / self->colorMapRange;
-
-    //    // Voxel color according to colormap value
-    //    return self->colorMap[self->colorMapSize * normalizedValue];
+inline float getEpsilon(const uniform VoxelizerRenderer* uniform self,
+                        const float dist, const uint32 spr,
+                        const unsigned int iteration)
+{
+    //    return max(0.001f, dist / (spr + 16 * min(iteration, 10)));
+    return max(0.001f, 1.f / spr);
 }
 
 inline float getShadowContribution(
     const uniform VoxelizerRenderer* uniform self, varying ScreenSample& sample,
     const vec3f point)
 {
-    uniform int i = 0;
     float pathOpacity = 0.f;
-    // for (uniform int i = 0; self->lights && i < self->numLights; ++i)
+
+    const vec3f aabbmin = make_vec3f(-0.5f) * self->volumeDimensions;
+    const vec3f aabbmax = make_vec3f(0.5f) * self->volumeDimensions;
+
+    for (uniform int i = 0; self->lights && i < self->numLights; ++i)
     {
         const uniform Light* uniform light = self->lights[i];
         const varying vec2f s = make_vec2f(1.f / self->randomNumber);
         DifferentialGeometry dg;
-        dg.P = point;
         const varying Light_SampleRes lightSample = light->sample(light, dg, s);
 
         vec3f dir;
@@ -288,25 +292,32 @@ inline float getShadowContribution(
         else
             dir = lightSample.dir;
 
-        const float samplesPerPixel = self->volumeSamplesPerRay;
-        const float epsilon = self->volumeDimensions.z / samplesPerPixel;
+        Ray shadowRay = sample.ray;
+        shadowRay.org = point;
+        shadowRay.dir = dir;
+        shadowRay.t0 = 0;
+        shadowRay.t = inf;
 
-        for (float t = epsilon;
-             pathOpacity < 1.f && t < self->volumeDimensions.z; t += epsilon)
+        float t0, t1;
+        if (intersectBox(shadowRay, aabbmin, aabbmax, t0, t1))
         {
-            const vec3f p = point + t * dir;
-            const vec4f voxelColor = getVoxelColor(self, p);
-            pathOpacity += (voxelColor.w > 0.f ? 1.f : 0.f);
+            t0 = max(0.f, t0);
+            t1 = max(0.f, t1);
+
+            const float epsilon =
+                getEpsilon(self, t1 - t0, self->samplesPerShadowRay,
+                           sample.sampleID.z);
+
+            for (float t = t1 + epsilon; pathOpacity < 1.f && t > t0;
+                 t -= epsilon)
+            {
+                const vec3f p = point + t * dir;
+                const vec4f voxelColor = getVoxelColor(self, p);
+                pathOpacity += (voxelColor.w > 0.f ? 1.f : 0.f);
+            }
         }
     }
     return pathOpacity;
-}
-
-inline float getEpsilon(const uniform VoxelizerRenderer* uniform self,
-                        const float dist, const unsigned int iteration)
-{
-    return max(0.001f,
-               dist / (self->volumeSamplesPerRay + 16 * min(iteration, 10)));
 }
 
 inline vec3f VoxelizerRenderer_shadeRay(
@@ -316,45 +327,50 @@ inline vec3f VoxelizerRenderer_shadeRay(
     float pathOpacity = 0.f;
 
     float t0, t1;
-    vec3f aabbmin = make_vec3f(0, 0, 0);
-    vec3f aabbmax = self->volumeDimensions;
-    intersectBox(sample.ray, aabbmin, aabbmax, t0, t1);
+    const vec3f aabbmin = make_vec3f(-0.5f) * self->volumeDimensions;
+    const vec3f aabbmax = make_vec3f(0.5f) * self->volumeDimensions;
 
-    const float epsilon = getEpsilon(self, t1 - t0, sample.sampleID.z);
-    const float random = getRandomValue(sample, self->randomNumber) * epsilon;
-    t0 -= random;
-    t1 -= random;
-
-    float t = t0;
-    vec3f point;
-    for (t = t0; pathOpacity < 1.f && t < t1; t += epsilon)
+    if (intersectBox(sample.ray, aabbmin, aabbmax, t0, t1))
     {
-        point = (sample.ray.org + t * sample.ray.dir) - 0.5f;
-        vec4f voxelColor = getVoxelColor(self, point);
-        const bool hit = (voxelColor.w > 0.f);
-        pathOpacity += voxelColor.w;
-        composite(voxelColor, pathColor, 1.f);
-        if (hit)
-            break;
+        const float epsilon =
+            getEpsilon(self, t1 - t0, self->samplesPerRay, sample.sampleID.z);
+
+        const float random =
+            getRandomValue(sample, self->randomNumber) * epsilon;
+        t0 -= random;
+        t1 -= random;
+
+        float t = t0;
+        vec3f point;
+        bool hit = false;
+        for (t = t0; pathOpacity < 1.f && t < t1 && !hit; t += epsilon)
+        {
+            point = sample.ray.org + t * sample.ray.dir;
+            vec4f voxelColor = getVoxelColor(self, point);
+            pathOpacity += voxelColor.w;
+            composite(voxelColor, pathColor, 1.f);
+            hit = voxelColor.w > 0.f;
+        }
+
+        // Shadow
+        if (hit && pathOpacity > 0.5f && self->shadows > 0.f)
+        {
+            const float shadowContribution =
+                pathOpacity *
+                (1.f -
+                 self->shadows * getShadowContribution(self, sample, point));
+            pathColor.x *= shadowContribution;
+            pathColor.y *= shadowContribution;
+            pathColor.z *= shadowContribution;
+        }
+
+        // Combine with background color
+        const vec4f bgColor = make_vec4f(self->bgColor, 1.f);
+        composite(bgColor, pathColor, 1.f);
+
+        sample.alpha = pathOpacity;
+        sample.z = t;
     }
-
-    // Shadow
-    if (pathOpacity > 0.5f && self->shadows > 0.f)
-    {
-        const float shadowContribution =
-            pathOpacity *
-            (1.f - self->shadows * getShadowContribution(self, sample, point));
-        pathColor.x *= shadowContribution;
-        pathColor.y *= shadowContribution;
-        pathColor.z *= shadowContribution;
-    }
-
-    // Combine with background color
-    const vec4f bgColor = make_vec4f(self->bgColor, 1.f);
-    composite(bgColor, pathColor, 1.f);
-
-    sample.alpha = pathOpacity;
-    sample.z = t;
 
     return make_vec3f(pathColor);
 }
@@ -388,8 +404,8 @@ export void VoxelizerRenderer_set(
     const uniform float& timestamp, const uniform int& spp,
     const uniform bool& electronShadingEnabled, void** uniform lights,
     const uniform int32 numLights, void** uniform materials,
-    const uniform int32 numMaterials, const uniform int32& volumeSamplesPerRay,
-    uniform vec4f* uniform colormap,
+    const uniform int32 numMaterials, const uniform int32& samplesPerRay,
+    const uniform int32& samplesPerShadowRay, uniform vec4f* uniform colormap,
     uniform vec3f* uniform emissionIntensitiesMap,
     const uniform int32 colorMapSize, const uniform float& colorMapMinValue,
     const uniform float& colorMapRange, const uniform float& threshold,
@@ -425,7 +441,8 @@ export void VoxelizerRenderer_set(
 
     self->threshold = threshold;
 
-    self->volumeSamplesPerRay = volumeSamplesPerRay;
+    self->samplesPerRay = samplesPerRay;
+    self->samplesPerShadowRay = samplesPerShadowRay;
     self->volumeDimensions = make_vec3f(1.f);
 
     self->divider = divider;
