@@ -2,8 +2,8 @@
  * All rights reserved. Do not distribute without permission.
  * Responsible Author: Cyrille Favreau <cyrille.favreau@epfl.ch>
  *
- * This file is part of the Brayns research modules
- * <https://github.com/favreau/Brayns-Research-Modules>
+ * This file is part of the circuit explorer for Brayns
+ * <https://github.com/favreau/Brayns-UC-ResearchModules>
  *
  * This library is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 3.0 as published
@@ -19,24 +19,25 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef BRAYNS_RESEARCH_MODULES_PLUGIN_H
-#define BRAYNS_RESEARCH_MODULES_PLUGIN_H
+#ifndef RESEARCHMODULESPARAMS_H
+#define RESEARCHMODULESPARAMS_H
 
-#include <brayns/pluginapi/ExtensionPlugin.h>
-#include <plugin/api/ResearchModulesParams.h>
+#include <brayns/common/types.h>
 
-/**
- * @brief The BraynsResearchModulesPlugin class manages the Brayns research
- * modules
- */
-class BraynsResearchModulesPlugin : public brayns::ExtensionPlugin
+struct Result
 {
-public:
-    BraynsResearchModulesPlugin();
-
-    void init() final;
-
-private:
-    void _attachEEGFile(const AttachEEGFile&);
+    bool success{false};
+    std::string error;
 };
-#endif // BRAYNS_RESEARCH_MODULES_PLUGIN_H
+std::string to_json(const Result& param);
+
+struct AttachEEGFile
+{
+    int32_t modelId;
+    std::string path;
+    double scale;
+    double density;
+};
+bool from_json(AttachEEGFile& attachEEGFile, const std::string& payload);
+
+#endif // RESEARCHMODULESPARAMS_H

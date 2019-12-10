@@ -22,7 +22,12 @@
 #include "BraynsResearchModulesPlugin.h"
 #include "log.h"
 
+#include <plugin/io/EEGHandler.h>
+
+#include <brayns/common/ActionInterface.h>
 #include <brayns/engine/Engine.h>
+#include <brayns/engine/Model.h>
+#include <brayns/engine/Scene.h>
 #include <brayns/pluginapi/PluginAPI.h>
 
 void _addClippingCamera(brayns::Engine& engine)
@@ -128,6 +133,36 @@ void BraynsResearchModulesPlugin::init()
     _addPathTracingRenderer(engine);
     //    _addPBRRenderer(engine);
     _addClippingCamera(engine);
+
+    auto actionInterface = _api->getActionInterface();
+    if (actionInterface)
+    {
+        PLUGIN_INFO << "Registering 'attach-cell-growth-handler' endpoint"
+                    << std::endl;
+        _api->getActionInterface()->registerNotification<AttachEEGFile>(
+            "attach-eeg-file",
+            [&](const AttachEEGFile& s) { _attachEEGFile(s); });
+    }
+}
+
+void BraynsResearchModulesPlugin::_attachEEGFile(const AttachEEGFile& payload)
+{
+    auto modelDescriptor = _api->getScene().getModel(payload.modelId);
+    if (modelDescriptor)
+        try
+        {
+            auto handler =
+                std::make_shared<EEGHandler>(payload.path, payload.scale,
+                                             payload.density);
+            modelDescriptor->getModel().setSimulationHandler(handler);
+        }
+        catch (const std::runtime_error& e)
+        {
+            PLUGIN_INFO << e.what() << std::endl;
+        }
+    else
+        PLUGIN_INFO << "Model " << payload.modelId << " is not registered"
+                    << std::endl;
 }
 
 extern "C" brayns::ExtensionPlugin* brayns_plugin_create(int /*argc*/,

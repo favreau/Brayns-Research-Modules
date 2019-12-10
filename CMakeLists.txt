@@ -36,7 +36,6 @@ set(${NAME}_SOURCES
     fractals/ispc/renderer/VoxelizerRenderer.cpp
     fractals/ispc/renderer/FractalsRenderer.cpp
     fractals/fractals.cpp
-    plugin/BraynsResearchModulesPlugin.cpp
 #    pbr/ispc/renderer/PbrRenderer.cpp
 #    pbr/pbr.cpp
     cartoon/ispc/renderer/ContoursRenderer.cpp
@@ -44,6 +43,9 @@ set(${NAME}_SOURCES
     cartoon/cartoon.cpp
     simulation/simulation.cpp
     simulation/ispc/renderer/TransparencyRenderer.cpp
+    plugin/api/ResearchModulesParams.cpp
+    plugin/io/EEGHandler.cpp
+    plugin/BraynsResearchModulesPlugin.cpp
 )
 
 set(${NAME}_ISPC_SOURCES

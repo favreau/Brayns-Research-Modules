@@ -73,13 +73,16 @@ void VoxelizerRenderer::commit()
     _divider = getParam1f("divider", 4096.f);
     _pixelOpacity = getParam1f("pixelOpacity", 0.2f);
 
-    ispc::VoxelizerRenderer_set(getIE(), (ispc::vec3f&)_bgColor, _shadows,
-                                _softShadows, _shadingEnabled, _randomNumber,
-                                _timestamp, _spp, _softnessEnabled, _lightPtr,
-                                _lightArray.size(), _materialPtr,
-                                _materialArray.size(), _samplesPerRay,
-                                _samplesPerShadowRay, _exposure, _divider,
-                                _pixelOpacity);
+    // Events
+    _events = getParamData("simulationData");
+    _nbEvents = _events ? _events->size() : 0;
+
+    ispc::VoxelizerRenderer_set(
+        getIE(), (_events ? (float*)_events->data : nullptr), _nbEvents,
+        (ispc::vec3f&)_bgColor, _shadows, _softShadows, _shadingEnabled,
+        _randomNumber, _timestamp, _spp, _softnessEnabled, _lightPtr,
+        _lightArray.size(), _materialPtr, _materialArray.size(), _samplesPerRay,
+        _samplesPerShadowRay, _exposure, _divider, _pixelOpacity);
 }
 
 VoxelizerRenderer::VoxelizerRenderer()

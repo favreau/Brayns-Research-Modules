@@ -2,8 +2,8 @@
  * All rights reserved. Do not distribute without permission.
  * Responsible Author: Cyrille Favreau <cyrille.favreau@epfl.ch>
  *
- * This file is part of the Brayns research modules
- * <https://github.com/favreau/Brayns-Research-Modules>
+ * This file is part of the circuit explorer for Brayns
+ * <https://github.com/favreau/Brayns-UC-CircuitExplorer>
  *
  * This library is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License version 3.0 as published
@@ -19,24 +19,37 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef BRAYNS_RESEARCH_MODULES_PLUGIN_H
-#define BRAYNS_RESEARCH_MODULES_PLUGIN_H
+#ifndef EEGHANDLER_H
+#define EEGHANDLER_H
 
-#include <brayns/pluginapi/ExtensionPlugin.h>
-#include <plugin/api/ResearchModulesParams.h>
+#include <brayns/common/simulation/AbstractSimulationHandler.h>
+
+#include <brayns/api.h>
+#include <brayns/common/types.h>
 
 /**
- * @brief The BraynsResearchModulesPlugin class manages the Brayns research
- * modules
+ * @brief The EEGHandler class handles distance to the soma
  */
-class BraynsResearchModulesPlugin : public brayns::ExtensionPlugin
+class EEGHandler : public brayns::AbstractSimulationHandler
 {
 public:
-    BraynsResearchModulesPlugin();
+    /**
+     * @brief Default constructor
+     */
+    EEGHandler(const std::string& filename, const float scale,
+               const float density);
+    EEGHandler(const EEGHandler& rhs);
+    ~EEGHandler();
 
-    void init() final;
+    void* getFrameData(const uint32_t) final;
+
+    bool isReady() const final { return true; }
+
+    brayns::AbstractSimulationHandlerPtr clone() const final;
 
 private:
-    void _attachEEGFile(const AttachEEGFile&);
+    bool _initialized{false};
 };
-#endif // BRAYNS_RESEARCH_MODULES_PLUGIN_H
+typedef std::shared_ptr<EEGHandler> EEGHandlerPtr;
+
+#endif // EEGHANDLER_H

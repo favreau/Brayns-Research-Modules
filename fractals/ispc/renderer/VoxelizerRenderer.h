@@ -64,5 +64,9 @@ private:
     // Divider
     float _divider;
     float _pixelOpacity;
+
+    // Events
+    ospray::Ref<ospray::Data> _events;
+    ospray::uint64 _nbEvents;
 };
 } // namespace brayns
