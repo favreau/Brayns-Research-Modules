@@ -117,6 +117,26 @@ void _addPBRRenderer(brayns::Engine& engine)
     engine.addRendererType("research_pbr", properties);
 }
 
+void _addNanoliveRenderer(brayns::Engine& engine)
+{
+    PLUGIN_INFO << "Registering Nanolive renderer" << std::endl;
+    brayns::PropertyMap properties;
+    properties.setProperty({"exposure", 1., 1., 10., {"Exposure"}});
+    properties.setProperty({"pixelOpacity", 0.5, 0.01, 1.0, {"Pixel opacity"}});
+    properties.setProperty({"maxBounces", 50, 1, 100, {"Max ray bounces"}});
+    properties.setProperty({"density", 0.01, 0.01, 10.0, {"Density"}});
+    engine.addRendererType("research_nanolive", properties);
+}
+
+void _addNesterFormenteraRenderer(brayns::Engine& engine)
+{
+    PLUGIN_INFO << "Registering Nester Formentera renderer" << std::endl;
+    brayns::PropertyMap properties;
+    properties.setProperty({"interval", 10, 2, 10000, {"Interval"}});
+    properties.setProperty({"thickness", 1, 1, 5000, {"Thickness"}});
+    engine.addRendererType("research_nesterformentera", properties);
+}
+
 BraynsResearchModulesPlugin::BraynsResearchModulesPlugin()
     : ExtensionPlugin()
 {
@@ -132,6 +152,8 @@ void BraynsResearchModulesPlugin::init()
     _addContoursRenderer(engine);
     _addPathTracingRenderer(engine);
     //    _addPBRRenderer(engine);
+    _addNanoliveRenderer(engine);
+    _addNesterFormenteraRenderer(engine);
     _addClippingCamera(engine);
 
     auto actionInterface = _api->getActionInterface();

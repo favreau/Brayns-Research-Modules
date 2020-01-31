@@ -43,6 +43,10 @@ set(${NAME}_SOURCES
     cartoon/cartoon.cpp
     simulation/simulation.cpp
     simulation/ispc/renderer/TransparencyRenderer.cpp
+    nanolive/ispc/renderer/NanoliveRenderer.cpp
+    nanolive/nanolive.cpp
+    nesterformentera/ispc/renderer/NesterFormenteraRenderer.cpp
+    nesterformentera/nesterformentera.cpp
     plugin/api/ResearchModulesParams.cpp
     plugin/io/EEGHandler.cpp
     plugin/BraynsResearchModulesPlugin.cpp
@@ -63,6 +67,8 @@ set(${NAME}_ISPC_SOURCES
 #    pbr/ispc/renderer/PbrRenderer.ispc
     cartoon/ispc/renderer/CartoonRenderer.ispc
     cartoon/ispc/renderer/ContoursRenderer.ispc
+    nanolive/ispc/renderer/NanoliveRenderer.ispc
+    nesterformentera/ispc/renderer/NesterFormenteraRenderer.ispc
     simulation/ispc/renderer/TransparencyRenderer.ispc
 )
 
